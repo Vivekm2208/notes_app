@@ -1,24 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:notes_app/core/features/notes/domain/entities/note.dart';
-import 'package:notes_app/core/features/notes/domain/repositories/note_repositories.dart';
+import 'package:notes_app/core/features/notes/presentation/provider/notes_provider.dart';
+import 'package:provider/provider.dart';
 
 class EditNoteScreen extends StatefulWidget {
-  const EditNoteScreen({
-    super.key,
-    required this.note,
-    required this.repositories,
-  });
+  const EditNoteScreen({super.key, required this.note});
 
   final Note note;
-  final NoteRepositories repositories;
 
   @override
   State<StatefulWidget> createState() => _EditNoteScreenState();
 }
 
 class _EditNoteScreenState extends State<EditNoteScreen> {
-  final titlecontroller = TextEditingController();
-  final contentcontroller = TextEditingController();
+  final titleController = TextEditingController();
+  final contentController = TextEditingController();
 
   final _formkey = GlobalKey<FormState>();
 
@@ -26,14 +22,14 @@ class _EditNoteScreenState extends State<EditNoteScreen> {
   void initState() {
     super.initState();
 
-    titlecontroller.text = widget.note.title;
-    contentcontroller.text = widget.note.content;
+    titleController.text = widget.note.title;
+    contentController.text = widget.note.content;
   }
 
   @override
   void dispose() {
-    titlecontroller.dispose();
-    contentcontroller.dispose();
+    titleController.dispose();
+    contentController.dispose();
     super.dispose();
   }
 
@@ -49,7 +45,7 @@ class _EditNoteScreenState extends State<EditNoteScreen> {
               children: [
                 SizedBox(height: 16),
                 TextFormField(
-                  controller: titlecontroller,
+                  controller: titleController,
                   validator: (value) {
                     if (value == null || value.trim().isEmpty) {
                       return 'Title can not be empty';
@@ -60,7 +56,7 @@ class _EditNoteScreenState extends State<EditNoteScreen> {
                 ),
                 SizedBox(height: 16),
                 TextFormField(
-                  controller: contentcontroller,
+                  controller: contentController,
                   validator: (value) {
                     if (value == null || value.trim().isEmpty) {
                       return 'Add some content';
@@ -74,11 +70,11 @@ class _EditNoteScreenState extends State<EditNoteScreen> {
                   onPressed: () async {
                     if (_formkey.currentState!.validate()) {
                       final note = Note(
-                        title: titlecontroller.text,
+                        title: titleController.text,
                         id: widget.note.id,
-                        content: contentcontroller.text,
+                        content: contentController.text,
                       );
-                      await widget.repositories.updateNote(note);
+                      await context.read<NotesProvider>().updateNote(note);
                       if (!mounted) return;
                       Navigator.pop(context, true);
                     }
