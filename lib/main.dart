@@ -12,7 +12,7 @@ void main() {
 
   runApp(
     ChangeNotifierProvider(
-      create: (_) => NotesProvider(repositories: repository),
+      create: (_) => NotesProvider(repositories: repository)..loadNotes(),
       child: MyApp(),
     ),
   );
@@ -23,6 +23,9 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(debugShowCheckedModeBanner: false, home: NotesScreen());
+    return const MaterialApp(
+      debugShowCheckedModeBanner: false,
+      home: NotesScreen(),
+    );
   }
 }

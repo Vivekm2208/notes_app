@@ -43,7 +43,7 @@ class _EditNoteScreenState extends State<EditNoteScreen> {
             key: _formkey,
             child: Column(
               children: [
-                SizedBox(height: 16),
+                const SizedBox(height: 16),
                 TextFormField(
                   controller: titleController,
                   validator: (value) {
@@ -54,7 +54,7 @@ class _EditNoteScreenState extends State<EditNoteScreen> {
                   },
                   decoration: const InputDecoration(labelText: 'Title'),
                 ),
-                SizedBox(height: 16),
+                const SizedBox(height: 16),
                 TextFormField(
                   controller: contentController,
                   validator: (value) {
@@ -65,7 +65,7 @@ class _EditNoteScreenState extends State<EditNoteScreen> {
                   },
                   decoration: const InputDecoration(labelText: 'Content'),
                 ),
-                SizedBox(height: 16),
+                const SizedBox(height: 16),
                 ElevatedButton(
                   onPressed: () async {
                     if (_formkey.currentState!.validate()) {

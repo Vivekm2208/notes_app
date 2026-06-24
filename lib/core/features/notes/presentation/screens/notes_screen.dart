@@ -4,31 +4,18 @@ import 'package:notes_app/core/features/notes/presentation/screens/add_note_scre
 import 'package:notes_app/core/features/notes/presentation/screens/edit_note_screen.dart';
 import 'package:provider/provider.dart';
 
-class NotesScreen extends StatefulWidget {
+class NotesScreen extends StatelessWidget {
   const NotesScreen({super.key});
-
-  @override
-  State<NotesScreen> createState() => _NotesScreenState();
-}
-
-class _NotesScreenState extends State<NotesScreen> {
-  @override
-  void initState() {
-    super.initState();
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<NotesProvider>().loadNotes();
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
-    final notes = context.watch<NotesProvider>().notes;
-
+    final provider = context.watch<NotesProvider>();
+    final notes = provider.notes;
     return Scaffold(
       appBar: AppBar(title: const Text('Notes')),
-      body: notes.isEmpty
-          ? const Center(child: Text('NO NOTES!'))
+      body: provider.isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : notes.isEmpty
+          ? const Center(child: Text('No notes yet!'))
           : ListView.builder(
               padding: const EdgeInsets.all(16),
               itemCount: notes.length,

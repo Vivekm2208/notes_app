@@ -11,9 +11,16 @@ class NotesProvider extends ChangeNotifier {
 
   List<Note> get notes => _notes;
 
-  Future<void> loadNotes() async {
-    _notes = await repositories.getNotes();
+  bool _isLoading = false;
 
+  bool get isLoading => _isLoading;
+
+  Future<void> loadNotes() async {
+    _isLoading = true;
+    notifyListeners();
+
+    _notes = await repositories.getNotes();
+    _isLoading = false;
     notifyListeners();
   }
 
