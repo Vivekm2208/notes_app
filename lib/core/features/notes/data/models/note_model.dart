@@ -1,20 +1,17 @@
 import '../../domain/entities/note.dart';
 
 class NoteModel extends Note {
-  const NoteModel({
-    required super.id,
-    required super.title,
-    required super.content,
-  });
+  NoteModel({required super.id, required super.title, required super.content});
 
-  factory NoteModel.fromJSON(Map<String, dynamic> json) {
-    return NoteModel(
-      id: json['id'],
-      title: json['title'],
-      content: json['content'],
-    );
-  }
-  Map<String, dynamic> toJson() {
+  Map<String, dynamic> toMap() {
     return {'id': id, 'title': title, 'content': content};
+  }
+
+  factory NoteModel.fromMap(Map<String, dynamic> map) {
+    return NoteModel(
+      id: map['id'],
+      title: map['title'],
+      content: map['content'],
+    );
   }
 }
