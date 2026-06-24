@@ -63,6 +63,7 @@ class _AddNoteScreenState extends State<AddNoteScreen> {
                       content: contentController.text,
                     );
                     await widget.repository.addNote(note);
+                    if (!mounted) return;
                     Navigator.pop(context, true);
                   }
                 },

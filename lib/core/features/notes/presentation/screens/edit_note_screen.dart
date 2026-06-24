@@ -79,6 +79,7 @@ class _EditNoteScreenState extends State<EditNoteScreen> {
                         content: contentcontroller.text,
                       );
                       await widget.repositories.updateNote(note);
+                      if (!mounted) return;
                       Navigator.pop(context, true);
                     }
                   },
