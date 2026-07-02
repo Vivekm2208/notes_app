@@ -9,11 +9,29 @@ class NotesProvider extends ChangeNotifier {
 
   List<Note> _notes = [];
 
+  String _searchQuery = '';
+  String get searchQuery => _searchQuery;
+
   List<Note> get notes => _notes;
 
   bool _isLoading = false;
 
   bool get isLoading => _isLoading;
+
+  List<Note> get filteredNotes {
+    if (_searchQuery.isEmpty) {
+      return _notes;
+    }
+    return _notes.where((note) {
+      return note.title.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+          note.content.toLowerCase().contains(_searchQuery.toLowerCase());
+    }).toList();
+  }
+
+  void updateSearchQuery(String value) async {
+    _searchQuery = value;
+    notifyListeners();
+  }
 
   Future<void> loadNotes() async {
     _isLoading = true;
