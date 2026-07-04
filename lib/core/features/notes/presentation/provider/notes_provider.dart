@@ -38,6 +38,14 @@ class NotesProvider extends ChangeNotifier {
     notifyListeners();
 
     _notes = await repositories.getNotes();
+
+    _notes.sort((a, b) {
+      if (a.isPinned != b.isPinned) {
+        return a.isPinned ? -1 : 1;
+      }
+
+      return a.title.compareTo(b.title);
+    });
     _isLoading = false;
     notifyListeners();
   }
@@ -57,5 +65,16 @@ class NotesProvider extends ChangeNotifier {
   Future<void> updateNote(Note note) async {
     await repositories.updateNote(note);
     await loadNotes();
+  }
+
+  Future<void> togglePin(Note note) async {
+    final updatedNote = Note(
+      id: note.id,
+      title: note.title,
+      content: note.content,
+      isPinned: !note.isPinned,
+    );
+
+    await updateNote(updatedNote);
   }
 }

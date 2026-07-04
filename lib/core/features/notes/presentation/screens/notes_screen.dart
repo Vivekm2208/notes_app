@@ -47,6 +47,18 @@ class NotesScreen extends StatelessWidget {
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   IconButton(
+                                    onPressed: () async {
+                                      await context
+                                          .read<NotesProvider>()
+                                          .togglePin(note);
+                                    },
+                                    icon: Icon(
+                                      note.isPinned
+                                          ? Icons.push_pin
+                                          : Icons.push_pin_outlined,
+                                    ),
+                                  ),
+                                  IconButton(
                                     icon: const Icon(Icons.edit),
                                     onPressed: () async {
                                       await Navigator.push(

@@ -35,6 +35,7 @@ class NoteRepositoryImpl implements NoteRepositories {
       id: note.id,
       title: note.title,
       content: note.content,
+      isPinned: note.isPinned,
     );
     await datasource.updateNote(model);
   }

@@ -73,6 +73,7 @@ class _EditNoteScreenState extends State<EditNoteScreen> {
                         title: titleController.text,
                         id: widget.note.id,
                         content: contentController.text,
+                        isPinned: widget.note.isPinned,
                       );
                       await context.read<NotesProvider>().updateNote(note);
                       if (!mounted) return;

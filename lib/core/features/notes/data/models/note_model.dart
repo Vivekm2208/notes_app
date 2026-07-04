@@ -1,10 +1,15 @@
 import '../../domain/entities/note.dart';
 
 class NoteModel extends Note {
-  NoteModel({required super.id, required super.title, required super.content});
+  NoteModel({
+    required super.id,
+    required super.title,
+    required super.content,
+    super.isPinned = false,
+  });
 
   Map<String, dynamic> toMap() {
-    return {'id': id, 'title': title, 'content': content};
+    return {'id': id, 'title': title, 'content': content, 'isPinned': isPinned};
   }
 
   factory NoteModel.fromMap(Map<String, dynamic> map) {
@@ -12,6 +17,7 @@ class NoteModel extends Note {
       id: map['id'],
       title: map['title'],
       content: map['content'],
+      isPinned: map['isPinned'] ?? false,
     );
   }
 }
