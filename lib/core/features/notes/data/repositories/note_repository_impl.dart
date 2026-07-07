@@ -14,6 +14,7 @@ class NoteRepositoryImpl implements NoteRepositories {
       id: note.id,
       title: note.title,
       content: note.content,
+      category: note.category,
     );
 
     await datasource.addNote(model);
@@ -36,6 +37,7 @@ class NoteRepositoryImpl implements NoteRepositories {
       title: note.title,
       content: note.content,
       isPinned: note.isPinned,
+      category: note.category,
     );
     await datasource.updateNote(model);
   }

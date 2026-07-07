@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:notes_app/core/features/notes/domain/entities/note.dart';
 import 'package:notes_app/core/features/notes/presentation/provider/notes_provider.dart';
 import 'package:notes_app/core/features/notes/presentation/screens/add_note_screen.dart';
 import 'package:notes_app/core/features/notes/presentation/screens/edit_note_screen.dart';
@@ -10,12 +11,40 @@ class NotesScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final provider = context.watch<NotesProvider>();
     final notes = provider.filteredNotes;
+
+    String capitalize(String text) {
+      return text[0].toUpperCase() + text.substring(1);
+    }
+
     return Scaffold(
       appBar: AppBar(title: const Text('Notes')),
       body: provider.isLoading
           ? const Center(child: CircularProgressIndicator())
           : Column(
               children: [
+                Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: DropdownButtonFormField<NoteCategory?>(
+                    initialValue: provider.selectedCategory,
+                    items: [
+                      DropdownMenuItem<NoteCategory?>(
+                        value: null,
+                        child: Text('All'),
+                      ),
+                      ...NoteCategory.values.map((category) {
+                        return DropdownMenuItem<NoteCategory?>(
+                          value: category,
+                          child: Text(capitalize(category.name)),
+                        );
+                      }),
+                    ],
+                    onChanged: (value) {
+                      context.read<NotesProvider>().updateSelectedCategory(
+                        value,
+                      );
+                    },
+                  ),
+                ),
                 Padding(
                   padding: const EdgeInsets.all(16),
                   child: TextField(
@@ -42,7 +71,13 @@ class NotesScreen extends StatelessWidget {
                             final note = notes[index];
                             return ListTile(
                               title: Text(note.title),
-                              subtitle: Text(note.content),
+                              subtitle: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(capitalize(note.category.name)),
+                                  Text(note.content),
+                                ],
+                              ),
                               trailing: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [

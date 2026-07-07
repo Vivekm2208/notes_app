@@ -16,6 +16,8 @@ class _EditNoteScreenState extends State<EditNoteScreen> {
   final titleController = TextEditingController();
   final contentController = TextEditingController();
 
+  late NoteCategory selectedCategory;
+
   final _formkey = GlobalKey<FormState>();
 
   @override
@@ -24,6 +26,7 @@ class _EditNoteScreenState extends State<EditNoteScreen> {
 
     titleController.text = widget.note.title;
     contentController.text = widget.note.content;
+    selectedCategory = widget.note.category;
   }
 
   @override
@@ -66,6 +69,21 @@ class _EditNoteScreenState extends State<EditNoteScreen> {
                   decoration: const InputDecoration(labelText: 'Content'),
                 ),
                 const SizedBox(height: 16),
+                DropdownButtonFormField<NoteCategory>(
+                  initialValue: selectedCategory,
+                  items: NoteCategory.values.map((category) {
+                    return DropdownMenuItem(
+                      value: category,
+                      child: Text(category.name),
+                    );
+                  }).toList(),
+                  onChanged: (value) {
+                    setState(() {
+                      selectedCategory = value!;
+                    });
+                  },
+                ),
+                const SizedBox(height: 16),
                 ElevatedButton(
                   onPressed: () async {
                     if (_formkey.currentState!.validate()) {
@@ -74,6 +92,7 @@ class _EditNoteScreenState extends State<EditNoteScreen> {
                         id: widget.note.id,
                         content: contentController.text,
                         isPinned: widget.note.isPinned,
+                        category: selectedCategory,
                       );
                       await context.read<NotesProvider>().updateNote(note);
                       if (!mounted) return;

@@ -7,6 +7,10 @@ class NotesProvider extends ChangeNotifier {
 
   final NoteRepositories repositories;
 
+  NoteCategory? _selectedCategory;
+
+  NoteCategory? get selectedCategory => _selectedCategory;
+
   List<Note> _notes = [];
 
   String _searchQuery = '';
@@ -19,17 +23,29 @@ class NotesProvider extends ChangeNotifier {
   bool get isLoading => _isLoading;
 
   List<Note> get filteredNotes {
-    if (_searchQuery.isEmpty) {
-      return _notes;
+    List<Note> filtered = _notes;
+
+    if (_selectedCategory != null) {
+      filtered = filtered
+          .where((note) => note.category == _selectedCategory)
+          .toList();
     }
-    return _notes.where((note) {
-      return note.title.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-          note.content.toLowerCase().contains(_searchQuery.toLowerCase());
-    }).toList();
+    if (_searchQuery.isNotEmpty) {
+      filtered = filtered.where((note) {
+        return note.title.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+            note.content.toLowerCase().contains(_searchQuery.toLowerCase());
+      }).toList();
+    }
+    return filtered;
   }
 
   void updateSearchQuery(String value) async {
     _searchQuery = value;
+    notifyListeners();
+  }
+
+  void updateSelectedCategory(NoteCategory? category) {
+    _selectedCategory = category;
     notifyListeners();
   }
 

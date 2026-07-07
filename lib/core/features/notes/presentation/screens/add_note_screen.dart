@@ -15,6 +15,8 @@ class _AddNoteScreenState extends State<AddNoteScreen> {
   final contentController = TextEditingController();
   final _formkey = GlobalKey<FormState>();
 
+  NoteCategory selectedCategory = NoteCategory.personal;
+
   @override
   void dispose() {
     titleController.dispose();
@@ -55,6 +57,21 @@ class _AddNoteScreenState extends State<AddNoteScreen> {
                   decoration: const InputDecoration(labelText: 'Content'),
                 ),
                 const SizedBox(height: 16),
+                DropdownButtonFormField<NoteCategory>(
+                  initialValue: selectedCategory,
+                  items: NoteCategory.values.map((category) {
+                    return DropdownMenuItem(
+                      value: category,
+                      child: Text(category.name),
+                    );
+                  }).toList(),
+                  onChanged: (value) {
+                    setState(() {
+                      selectedCategory = value!;
+                    });
+                  },
+                ),
+                const SizedBox(height: 16),
                 ElevatedButton(
                   onPressed: () async {
                     if (_formkey.currentState!.validate()) {
@@ -62,6 +79,7 @@ class _AddNoteScreenState extends State<AddNoteScreen> {
                         title: titleController.text,
                         id: DateTime.now().millisecondsSinceEpoch.toString(),
                         content: contentController.text,
+                        category: selectedCategory,
                       );
                       await context.read<NotesProvider>().addNote(note);
                       if (!mounted) return;
