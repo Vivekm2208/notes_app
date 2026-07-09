@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:notes_app/core/features/notes/domain/entities/note.dart';
 import 'package:notes_app/core/features/notes/presentation/provider/notes_provider.dart';
 import 'package:provider/provider.dart';
+import 'package:notes_app/core/features/notes/presentation/widgets/color_picker.dart';
 
 class AddNoteScreen extends StatefulWidget {
   const AddNoteScreen({super.key});
@@ -14,8 +15,10 @@ class _AddNoteScreenState extends State<AddNoteScreen> {
   final titleController = TextEditingController();
   final contentController = TextEditingController();
   final _formkey = GlobalKey<FormState>();
+  final now = DateTime.now();
 
   NoteCategory selectedCategory = NoteCategory.personal;
+  Color selectedColor = Colors.white;
 
   @override
   void dispose() {
@@ -72,6 +75,15 @@ class _AddNoteScreenState extends State<AddNoteScreen> {
                   },
                 ),
                 const SizedBox(height: 16),
+                ColorPicker(
+                  selectedColor: selectedColor,
+                  onColorSelected: (color) {
+                    setState(() {
+                      selectedColor = color;
+                    });
+                  },
+                ),
+                SizedBox(height: 16),
                 ElevatedButton(
                   onPressed: () async {
                     if (_formkey.currentState!.validate()) {
@@ -80,6 +92,9 @@ class _AddNoteScreenState extends State<AddNoteScreen> {
                         id: DateTime.now().millisecondsSinceEpoch.toString(),
                         content: contentController.text,
                         category: selectedCategory,
+                        colorValue: selectedColor.toARGB32(),
+                        createdAt: now,
+                        lastEdited: now,
                       );
                       await context.read<NotesProvider>().addNote(note);
                       if (!mounted) return;

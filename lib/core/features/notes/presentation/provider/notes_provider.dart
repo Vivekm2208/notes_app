@@ -84,12 +84,7 @@ class NotesProvider extends ChangeNotifier {
   }
 
   Future<void> togglePin(Note note) async {
-    final updatedNote = Note(
-      id: note.id,
-      title: note.title,
-      content: note.content,
-      isPinned: !note.isPinned,
-    );
+    final updatedNote = note.copyWith(isPinned: !note.isPinned);
 
     await updateNote(updatedNote);
   }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:notes_app/core/features/notes/domain/entities/note.dart';
 import 'package:notes_app/core/features/notes/presentation/provider/notes_provider.dart';
 import 'package:provider/provider.dart';
+import 'package:notes_app/core/features/notes/presentation/widgets/color_picker.dart';
 
 class EditNoteScreen extends StatefulWidget {
   const EditNoteScreen({super.key, required this.note});
@@ -17,8 +18,10 @@ class _EditNoteScreenState extends State<EditNoteScreen> {
   final contentController = TextEditingController();
 
   late NoteCategory selectedCategory;
+  late Color selectedColor;
 
   final _formkey = GlobalKey<FormState>();
+  final now = DateTime.now();
 
   @override
   void initState() {
@@ -27,6 +30,7 @@ class _EditNoteScreenState extends State<EditNoteScreen> {
     titleController.text = widget.note.title;
     contentController.text = widget.note.content;
     selectedCategory = widget.note.category;
+    selectedColor = Color(widget.note.colorValue);
   }
 
   @override
@@ -84,17 +88,28 @@ class _EditNoteScreenState extends State<EditNoteScreen> {
                   },
                 ),
                 const SizedBox(height: 16),
+                ColorPicker(
+                  selectedColor: selectedColor,
+                  onColorSelected: (color) {
+                    setState(() {
+                      selectedColor = color;
+                    });
+                  },
+                ),
+                SizedBox(height: 16),
                 ElevatedButton(
                   onPressed: () async {
                     if (_formkey.currentState!.validate()) {
-                      final note = Note(
+                      final updatedNote = widget.note.copyWith(
                         title: titleController.text,
-                        id: widget.note.id,
                         content: contentController.text,
-                        isPinned: widget.note.isPinned,
                         category: selectedCategory,
+                        colorValue: selectedColor.toARGB32(),
+                        lastEdited: now,
                       );
-                      await context.read<NotesProvider>().updateNote(note);
+                      await context.read<NotesProvider>().updateNote(
+                        updatedNote,
+                      );
                       if (!mounted) return;
                       Navigator.pop(context, true);
                     }

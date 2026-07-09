@@ -4,6 +4,7 @@ import 'package:notes_app/core/features/notes/presentation/provider/notes_provid
 import 'package:notes_app/core/features/notes/presentation/screens/add_note_screen.dart';
 import 'package:notes_app/core/features/notes/presentation/screens/edit_note_screen.dart';
 import 'package:provider/provider.dart';
+import 'package:notes_app/core/utils/date_formatter.dart';
 
 class NotesScreen extends StatelessWidget {
   const NotesScreen({super.key});
@@ -69,75 +70,89 @@ class NotesScreen extends StatelessWidget {
                           itemCount: notes.length,
                           itemBuilder: (context, index) {
                             final note = notes[index];
-                            return ListTile(
-                              title: Text(note.title),
-                              subtitle: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(capitalize(note.category.name)),
-                                  Text(note.content),
-                                ],
-                              ),
-                              trailing: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  IconButton(
-                                    onPressed: () async {
-                                      await context
-                                          .read<NotesProvider>()
-                                          .togglePin(note);
-                                    },
-                                    icon: Icon(
-                                      note.isPinned
-                                          ? Icons.push_pin
-                                          : Icons.push_pin_outlined,
-                                    ),
-                                  ),
-                                  IconButton(
-                                    icon: const Icon(Icons.edit),
-                                    onPressed: () async {
-                                      await Navigator.push(
+                            return Card(
+                              color: Color(note.colorValue),
+                              child: ListTile(
+                                title: Text(note.title),
+                                subtitle: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(note.content),
+                                    const SizedBox(height: 4),
+                                    Text(capitalize(note.category.name)),
+                                    Text(
+                                      DateFormatter.format(note.createdAt),
+                                      style: Theme.of(
                                         context,
-                                        MaterialPageRoute(
-                                          builder: (context) =>
-                                              EditNoteScreen(note: note),
-                                        ),
-                                      );
-                                    },
-                                  ),
-                                  IconButton(
-                                    icon: const Icon(Icons.delete),
-                                    onPressed: () async {
-                                      final shouldDelete = await showDialog<bool>(
-                                        context: context,
-                                        builder: (context) => AlertDialog(
-                                          title: const Text('Delete Note?'),
-                                          content: const Text(
-                                            'Are you sure you want to delete this note?',
-                                          ),
-                                          actions: [
-                                            TextButton(
-                                              onPressed: () =>
-                                                  Navigator.pop(context, false),
-                                              child: const Text('Cancel'),
-                                            ),
-                                            TextButton(
-                                              onPressed: () =>
-                                                  Navigator.pop(context, true),
-                                              child: const Text('Delete'),
-                                            ),
-                                          ],
-                                        ),
-                                      );
-                                      if (shouldDelete == true &&
-                                          context.mounted) {
+                                      ).textTheme.bodySmall,
+                                    ),
+                                  ],
+                                ),
+                                trailing: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    IconButton(
+                                      onPressed: () async {
                                         await context
                                             .read<NotesProvider>()
-                                            .deleteNote(note.id);
-                                      }
-                                    },
-                                  ),
-                                ],
+                                            .togglePin(note);
+                                      },
+                                      icon: Icon(
+                                        note.isPinned
+                                            ? Icons.push_pin
+                                            : Icons.push_pin_outlined,
+                                      ),
+                                    ),
+                                    IconButton(
+                                      icon: const Icon(Icons.edit),
+                                      onPressed: () async {
+                                        await Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (context) =>
+                                                EditNoteScreen(note: note),
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                    IconButton(
+                                      icon: const Icon(Icons.delete),
+                                      onPressed: () async {
+                                        final shouldDelete = await showDialog<bool>(
+                                          context: context,
+                                          builder: (context) => AlertDialog(
+                                            title: const Text('Delete Note?'),
+                                            content: const Text(
+                                              'Are you sure you want to delete this note?',
+                                            ),
+                                            actions: [
+                                              TextButton(
+                                                onPressed: () => Navigator.pop(
+                                                  context,
+                                                  false,
+                                                ),
+                                                child: const Text('Cancel'),
+                                              ),
+                                              TextButton(
+                                                onPressed: () => Navigator.pop(
+                                                  context,
+                                                  true,
+                                                ),
+                                                child: const Text('Delete'),
+                                              ),
+                                            ],
+                                          ),
+                                        );
+                                        if (shouldDelete == true &&
+                                            context.mounted) {
+                                          await context
+                                              .read<NotesProvider>()
+                                              .deleteNote(note.id);
+                                        }
+                                      },
+                                    ),
+                                  ],
+                                ),
                               ),
                             );
                           },

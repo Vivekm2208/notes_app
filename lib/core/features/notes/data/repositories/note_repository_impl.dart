@@ -15,6 +15,10 @@ class NoteRepositoryImpl implements NoteRepositories {
       title: note.title,
       content: note.content,
       category: note.category,
+      colorValue: note.colorValue,
+      isPinned: note.isPinned,
+      createdAt: note.createdAt,
+      lastEdited: note.lastEdited,
     );
 
     await datasource.addNote(model);
@@ -38,6 +42,9 @@ class NoteRepositoryImpl implements NoteRepositories {
       content: note.content,
       isPinned: note.isPinned,
       category: note.category,
+      colorValue: note.colorValue,
+      createdAt: note.createdAt,
+      lastEdited: note.lastEdited,
     );
     await datasource.updateNote(model);
   }
