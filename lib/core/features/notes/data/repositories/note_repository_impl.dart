@@ -5,28 +5,13 @@ import '../datasources/local_note_datasources.dart';
 import '../models/note_model.dart';
 
 class NoteRepositoryImpl implements NoteRepositories {
-  final LocalNoteDatasources datasource;
   NoteRepositoryImpl(this.datasource);
+
+  final LocalNoteDatasources datasource;
 
   @override
   Future<void> addNote(Note note) async {
-    final model = NoteModel(
-      id: note.id,
-      title: note.title,
-      content: note.content,
-      category: note.category,
-      colorValue: note.colorValue,
-      isPinned: note.isPinned,
-      createdAt: note.createdAt,
-      lastEdited: note.lastEdited,
-    );
-
-    await datasource.addNote(model);
-  }
-
-  @override
-  Future<List<Note>> getNotes() async {
-    return datasource.getNotes();
+    await datasource.addNote(NoteModel.fromEntity(note));
   }
 
   @override
@@ -35,17 +20,12 @@ class NoteRepositoryImpl implements NoteRepositories {
   }
 
   @override
+  Future<List<Note>> getNotes() async {
+    return datasource.getNotes();
+  }
+
+  @override
   Future<void> updateNote(Note note) async {
-    final model = NoteModel(
-      id: note.id,
-      title: note.title,
-      content: note.content,
-      isPinned: note.isPinned,
-      category: note.category,
-      colorValue: note.colorValue,
-      createdAt: note.createdAt,
-      lastEdited: note.lastEdited,
-    );
-    await datasource.updateNote(model);
+    await datasource.updateNote(NoteModel.fromEntity(note));
   }
 }
