@@ -17,25 +17,17 @@ class AppDrawer extends StatelessWidget {
         padding: EdgeInsets.zero,
         children: [
           DrawerHeader(
-            decoration: const BoxDecoration(color: Colors.blue),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
                 Icon(Icons.notes, color: Colors.white, size: 40),
                 SizedBox(height: 12),
-                const Text(
-                  'Notes App',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
+                Text('NOTED', style: Theme.of(context).textTheme.titleMedium),
 
                 Text(
                   'Organize your Ideas',
-                  style: TextStyle(color: Colors.white70),
+                  style: Theme.of(context).textTheme.bodyMedium,
                 ),
               ],
             ),
@@ -43,7 +35,10 @@ class AppDrawer extends StatelessWidget {
           ListTile(
             selected: selected == DrawerItem.notes,
             leading: const Icon(Icons.notes_outlined),
-            title: const Text('Notes'),
+            title: Text(
+              'Notes',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
             onTap: () {
               if (selected != DrawerItem.notes) {
                 Navigator.pop(context);
@@ -61,7 +56,10 @@ class AppDrawer extends StatelessWidget {
           ListTile(
             selected: selected == DrawerItem.archive,
             leading: const Icon(Icons.archive_outlined),
-            title: const Text('Archive'),
+            title: Text(
+              'Archived',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
             onTap: () {
               if (selected != DrawerItem.archive) {
                 Navigator.pop(context);
@@ -79,7 +77,10 @@ class AppDrawer extends StatelessWidget {
           ListTile(
             selected: selected == DrawerItem.trash,
             leading: const Icon(Icons.delete_outlined),
-            title: const Text('Trash Bin'),
+            title: Text(
+              'Trash Bin',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
             onTap: () {
               if (selected != DrawerItem.trash) {
                 Navigator.pop(context);

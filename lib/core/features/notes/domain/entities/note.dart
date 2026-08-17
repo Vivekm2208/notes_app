@@ -8,6 +8,8 @@ enum NoteStatus { active, archived, trashed }
 
 enum NoteType { text, checklist }
 
+enum ReminderRecurrence { none, daily, weekly, monthly, yearly }
+
 class Note {
   const Note({
     required this.title,
@@ -20,8 +22,9 @@ class Note {
     this.colorValue = 0xFFFFFFFF,
     required this.createdAt,
     required this.lastEdited,
-    required this.reminderAt,
-    required this.notificationId,
+    this.reminderAt,
+    this.notificationId,
+    this.recurrence = ReminderRecurrence.none,
     this.isPinned = false,
   });
 
@@ -34,6 +37,7 @@ class Note {
   final bool isPinned;
   final DateTime lastEdited;
   final DateTime? reminderAt;
+  final ReminderRecurrence recurrence;
   final int? notificationId;
   final NoteStatus status;
   final String title;
@@ -54,6 +58,7 @@ class Note {
     DateTime? createdAt,
     DateTime? lastEdited,
     Object? reminderAt = _unset,
+    ReminderRecurrence? recurrence,
     Object? notificationId = _unset,
   }) {
     return Note(
@@ -71,6 +76,7 @@ class Note {
       reminderAt: reminderAt == _unset
           ? this.reminderAt
           : reminderAt as DateTime?,
+      recurrence: recurrence ?? this.recurrence,
       notificationId: notificationId == _unset
           ? this.notificationId
           : notificationId as int?,

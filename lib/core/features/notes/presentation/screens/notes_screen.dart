@@ -5,45 +5,93 @@ import 'package:notes_app/core/features/notes/presentation/screens/add_note_scre
 import 'package:notes_app/core/features/notes/presentation/screens/edit_note_screen.dart';
 import 'package:notes_app/core/features/notes/presentation/widgets/category_filterbar.dart';
 import 'package:notes_app/core/features/notes/presentation/widgets/create_note_bottom_sheet.dart';
+import 'package:notes_app/core/features/notes/presentation/widgets/note_action_sheet.dart';
 import 'package:notes_app/core/features/notes/presentation/widgets/note_card.dart';
 import 'package:notes_app/core/features/notes/presentation/widgets/note_search_field.dart';
+
+import 'package:notes_app/core/theme/app_spacing.dart';
+import 'package:notes_app/core/theme/noted_colors.dart';
 import 'package:provider/provider.dart';
 import 'package:notes_app/core/features/notes/presentation/widgets/app_drawer.dart';
 
-class NotesScreen extends StatelessWidget {
+class NotesScreen extends StatefulWidget {
   const NotesScreen({super.key});
+
+  @override
+  State<StatefulWidget> createState() => _NotesScreenState();
+}
+
+class _NotesScreenState extends State<NotesScreen> {
+  bool _isSearching = false;
 
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<NotesProvider>();
     final notes = provider.activeNotes;
+
     return Scaffold(
+      //App Drawer
       drawer: AppDrawer(selected: DrawerItem.notes),
       appBar: AppBar(
-        title: const Text('Notes'),
+        title: _isSearching
+            //Searching feature
+            ? NoteSearchfield(
+                onChanged: context.read<NotesProvider>().updateSearchQuery,
+              )
+            : Text('NOTED', style: Theme.of(context).textTheme.titleLarge),
+        backgroundColor: NotedColors.background,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
         actions: [
+          if (!_isSearching)
+            IconButton(
+              onPressed: () {
+                setState(() {
+                  _isSearching = true;
+                });
+              },
+              icon: const Icon(Icons.search_outlined),
+            ),
+
+          if (_isSearching)
+            IconButton(
+              onPressed: () {
+                setState(() {
+                  _isSearching = false;
+                });
+                context.read<NotesProvider>().updateSearchQuery('');
+              },
+              icon: const Icon(Icons.close),
+            ),
+          //Sorting feature
           PopupMenuButton<SortType>(
             onSelected: (value) {
               context.read<NotesProvider>().updateSortType(value);
             },
             itemBuilder: (context) => [
-              const PopupMenuItem(
+              PopupMenuItem(
                 value: SortType.recent,
                 child: Row(
                   children: [
                     Icon(Icons.schedule),
                     SizedBox(width: 8),
-                    Text('Recently Edited'),
+                    Text(
+                      'Recently Edited',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
                   ],
                 ),
               ),
-              const PopupMenuItem(
+              PopupMenuItem(
                 value: SortType.alphabetical,
                 child: Row(
                   children: [
                     Icon(Icons.sort_by_alpha),
                     SizedBox(width: 8),
-                    Text('Alphabetical'),
+                    Text(
+                      'Alphabetical',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
                   ],
                 ),
               ),
@@ -59,108 +107,114 @@ class NotesScreen extends StatelessWidget {
               children: [
                 Padding(
                   padding: const EdgeInsets.all(16.0),
+                  //Filter by category
                   child: CategoryFilterbar(
                     selectedCategory: provider.selectedCategory,
                     onChanged: provider.updateSelectedCategory,
                   ),
                 ),
-                Padding(
-                  padding: const EdgeInsets.all(16),
-
-                  child: NoteSearchfield(
-                    hintText: 'Search Notes...',
-                    onChanged: provider.updateSearchQuery,
-                  ),
-                ),
+                const SizedBox(height: 12),
 
                 Expanded(
                   child: provider.notes.isEmpty
                       ? const Center(child: Text('No notes yet!'))
                       : notes.isEmpty
                       ? const Center(child: Text('No notes found!'))
-                      : ListView.builder(
+                      : ListView.separated(
                           padding: const EdgeInsets.all(16),
                           itemCount: notes.length,
                           itemBuilder: (context, index) {
                             final note = notes[index];
 
-                            return NoteCard(
-                              note: note,
-                              onTap: () async {
-                                await Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) =>
-                                        EditNoteScreen(note: note),
-                                  ),
-                                );
-                              },
-
-                              trailing: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  IconButton(
-                                    onPressed: () async {
-                                      await context
-                                          .read<NotesProvider>()
-                                          .togglePin(note);
-                                    },
-                                    icon: Icon(
-                                      note.isPinned
-                                          ? Icons.push_pin
-                                          : Icons.push_pin_outlined,
+                            return Dismissible(
+                              key: ValueKey(note.id),
+                              direction: DismissDirection.horizontal,
+                              background: Container(
+                                color: NotedColors.surfaceVariant,
+                                alignment: Alignment.centerRight,
+                                padding: EdgeInsets.only(
+                                  right: NotedSpacing.md,
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.archive, color: Colors.white),
+                                    Text(
+                                      'Archive',
+                                      style: Theme.of(
+                                        context,
+                                      ).textTheme.titleMedium,
                                     ),
-                                  ),
-
-                                  IconButton(
-                                    icon: const Icon(Icons.delete),
-                                    onPressed: () async {
-                                      final shouldDelete = await showDialog<bool>(
-                                        context: context,
-                                        builder: (context) => AlertDialog(
-                                          title: const Text('Delete Note?'),
-                                          content: const Text(
-                                            'Are you sure you want to delete this note?',
-                                          ),
-                                          actions: [
-                                            TextButton(
-                                              onPressed: () =>
-                                                  Navigator.pop(context, false),
-                                              child: const Text('Cancel'),
-                                            ),
-                                            TextButton(
-                                              onPressed: () =>
-                                                  Navigator.pop(context, true),
-                                              child: const Text('Delete'),
-                                            ),
-                                          ],
-                                        ),
-                                      );
-                                      if (shouldDelete == true &&
-                                          context.mounted) {
-                                        await context
-                                            .read<NotesProvider>()
-                                            .moveToTrash(note);
-                                      }
+                                  ],
+                                ),
+                              ),
+                              secondaryBackground: Container(
+                                color: NotedColors.surfaceVariant,
+                                alignment: Alignment.centerLeft,
+                                padding: EdgeInsets.only(left: NotedSpacing.md),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.end,
+                                  children: [
+                                    Text(
+                                      'Delete',
+                                      style: Theme.of(
+                                        context,
+                                      ).textTheme.titleMedium,
+                                    ),
+                                    Icon(
+                                      Icons.delete_outlined,
+                                      color: Colors.white,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              onDismissed: (direction) async {
+                                if (direction == DismissDirection.endToStart) {
+                                  await context
+                                      .read<NotesProvider>()
+                                      .moveToTrash(note);
+                                } else if (direction ==
+                                    DismissDirection.startToEnd) {
+                                  await context
+                                      .read<NotesProvider>()
+                                      .archiveNote(note);
+                                }
+                              },
+                              //NoteCard
+                              child: NoteCard(
+                                note: note,
+                                onTap: () async {
+                                  await Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) =>
+                                          EditNoteScreen(note: note),
+                                    ),
+                                  );
+                                },
+                                onLongPress: () {
+                                  showModalBottomSheet(
+                                    context: context,
+                                    builder: (context) {
+                                      return NoteActionSheet(note: note);
                                     },
-                                  ),
-                                  IconButton(
-                                    icon: const Icon(Icons.archive_outlined),
-                                    onPressed: () async {
-                                      await context
-                                          .read<NotesProvider>()
-                                          .archiveNote(note);
-                                    },
-                                  ),
-                                ],
+                                  );
+                                },
                               ),
                             );
+                          },
+                          separatorBuilder: (context, index) {
+                            return const SizedBox(height: 12);
                           },
                         ),
                 ),
               ],
             ),
+      /* ADD NOTE 
+            Text/Checklist
+             */
       floatingActionButton: FloatingActionButton(
+        foregroundColor: NotedColors.surface,
+        backgroundColor: NotedColors.accent,
         onPressed: () async {
           final type = await showModalBottomSheet<NoteType>(
             context: context,

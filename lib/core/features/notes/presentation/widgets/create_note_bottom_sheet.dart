@@ -13,9 +13,9 @@ class CreateNoteBottomSheet extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('Create New', style: Theme.of(context).textTheme.titleLarge),
+            Text('Create New', style: Theme.of(context).textTheme.titleMedium),
 
-            const SizedBox(height: 20),
+            const SizedBox(height: 16),
             CreateNoteOption(
               icon: Icons.note_outlined,
               title: 'Text Note',
@@ -24,7 +24,7 @@ class CreateNoteBottomSheet extends StatelessWidget {
                 Navigator.pop(context, NoteType.text);
               },
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 16),
             CreateNoteOption(
               icon: Icons.checklist,
               title: 'Checklist',

@@ -6,6 +6,7 @@ import 'core/features/notes/data/datasources/local_note_datasources.dart';
 import 'core/features/notes/data/repositories/note_repository_impl.dart';
 import 'core/features/notes/presentation/screens/notes_screen.dart';
 import 'package:provider/provider.dart';
+import 'package:notes_app/core/theme/app_theme.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -33,7 +34,8 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const MaterialApp(
+    return MaterialApp(
+      theme: NotedTheme.dark,
       debugShowCheckedModeBanner: false,
       home: NotesScreen(),
     );

@@ -14,6 +14,7 @@ class NoteSearchfield extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return TextField(
+      style: Theme.of(context).textTheme.titleMedium,
       decoration: InputDecoration(
         hintText: hintText,
         prefixIcon: const Icon(Icons.search),

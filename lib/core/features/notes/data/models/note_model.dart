@@ -16,6 +16,7 @@ class NoteModel extends Note {
     required super.lastEdited,
     super.reminderAt,
     super.notificationId,
+    super.recurrence = ReminderRecurrence.none,
   });
 
   factory NoteModel.fromEntity(Note note) {
@@ -33,6 +34,7 @@ class NoteModel extends Note {
       lastEdited: note.lastEdited,
       reminderAt: note.reminderAt,
       notificationId: note.notificationId,
+      recurrence: note.recurrence,
     );
   }
 
@@ -45,8 +47,9 @@ class NoteModel extends Note {
       checklistItems:
           (map['checklistItems'] as List?)
               ?.map(
-                (item) =>
-                    ChecklistItemModel.fromMap(item as Map<String, dynamic>),
+                (item) => ChecklistItemModel.fromMap(
+                  Map<String, dynamic>.from(item as Map),
+                ),
               )
               .toList() ??
           const [],
@@ -65,6 +68,7 @@ class NoteModel extends Note {
           ? DateTime.parse(map['reminderAt'] as String)
           : null,
       notificationId: map['notificationId'] as int?,
+      recurrence: ReminderRecurrence.values.byName(map['recurrence'] ?? 'none'),
     );
   }
 
@@ -87,6 +91,7 @@ class NoteModel extends Note {
       'lastEdited': lastEdited.toIso8601String(),
       'reminderAt': reminderAt?.toIso8601String(),
       'notificationId': notificationId,
+      'recurrence': recurrence.name,
     };
   }
 }

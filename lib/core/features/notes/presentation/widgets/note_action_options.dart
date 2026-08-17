@@ -1,17 +1,15 @@
 import 'package:flutter/material.dart';
 
-class CreateNoteOption extends StatelessWidget {
-  const CreateNoteOption({
+class NoteActionOptions extends StatelessWidget {
+  const NoteActionOptions({
     super.key,
-    required this.icon,
     required this.title,
-    required this.subtitle,
+    required this.icon,
     required this.onTap,
   });
-  final IconData icon;
-  final String title;
-  final String subtitle;
 
+  final String title;
+  final IconData icon;
   final VoidCallback onTap;
 
   @override
@@ -19,8 +17,6 @@ class CreateNoteOption extends StatelessWidget {
     return ListTile(
       leading: Icon(icon),
       title: Text(title, style: Theme.of(context).textTheme.titleMedium),
-      subtitle: Text(subtitle, style: Theme.of(context).textTheme.bodyMedium),
-      trailing: Icon(Icons.arrow_forward_ios),
       onTap: onTap,
     );
   }

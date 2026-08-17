@@ -17,7 +17,7 @@ class ArchiveScreen extends StatelessWidget {
 
     return Scaffold(
       drawer: AppDrawer(selected: DrawerItem.archive),
-      appBar: AppBar(title: const Text('Archive')),
+      appBar: AppBar(title: const Text('Archived')),
 
       body: Column(
         children: [

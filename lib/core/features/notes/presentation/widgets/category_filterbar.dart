@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:notes_app/core/features/notes/domain/entities/note.dart';
+import 'package:notes_app/core/features/notes/presentation/widgets/category_clip.dart';
 import 'package:notes_app/core/utils/string_formatter.dart';
 
 class CategoryFilterbar extends StatelessWidget {
@@ -18,18 +19,27 @@ class CategoryFilterbar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DropdownButtonFormField<NoteCategory?>(
-      initialValue: selectedCategory,
-      items: [
-        DropdownMenuItem<NoteCategory?>(value: null, child: Text('All')),
-        ...NoteCategory.values.map((category) {
-          return DropdownMenuItem<NoteCategory?>(
-            value: category,
-            child: Text(StringFormatter.capitalize(category.name)),
-          );
-        }),
-      ],
-      onChanged: onChanged,
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+
+      child: Row(
+        children: [
+          CategoryClip(
+            label: 'All',
+            category: null,
+            onSelectedCategory: onChanged,
+            selectedCategory: selectedCategory,
+          ),
+          ...NoteCategory.values.map(
+            (category) => CategoryClip(
+              label: StringFormatter.capitalize(category.name),
+              category: category,
+              onSelectedCategory: onChanged,
+              selectedCategory: selectedCategory,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

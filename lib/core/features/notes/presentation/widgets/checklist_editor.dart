@@ -2,10 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:notes_app/core/features/notes/domain/entities/checklist_item.dart';
 import 'package:notes_app/core/features/notes/presentation/widgets/checklist_item_tile.dart';
 
-class ChecklistEditor extends StatefulWidget {
+class ChecklistEditor extends StatelessWidget {
   const ChecklistEditor({
     super.key,
     required this.items,
+    required this.focusedItemId,
     required this.onAdd,
     required this.onRemove,
     required this.onToggle,
@@ -14,39 +15,38 @@ class ChecklistEditor extends StatefulWidget {
 
   final List<ChecklistItem> items;
 
-  final ValueChanged<String> onToggle;
-
-  final ValueChanged<ChecklistItem> onUpdate;
-
-  final ValueChanged<String> onRemove;
+  final String? focusedItemId;
 
   final VoidCallback onAdd;
-  @override
-  State<StatefulWidget> createState() => _ChecklistEditorState();
-}
+  final ValueChanged<String> onToggle;
+  final ValueChanged<ChecklistItem> onUpdate;
+  final ValueChanged<String> onRemove;
 
-class _ChecklistEditorState extends State<ChecklistEditor> {
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
-        ListView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          itemCount: widget.items.length,
-          itemBuilder: (context, index) {
-            final item = widget.items[index];
-            return ChecklistItemTile(
-              item: item,
-              onRemove: widget.onRemove,
-              onToggle: widget.onToggle,
-              onUpdate: widget.onUpdate,
-            );
-          },
+        Expanded(
+          child: ListView.builder(
+            shrinkWrap: true,
+            scrollDirection: Axis.vertical,
+            itemCount: items.length,
+            itemBuilder: (context, index) {
+              final item = items[index];
+
+              return ChecklistItemTile(
+                item: item,
+                autoFocus: item.id == focusedItemId,
+                onRemove: onRemove,
+                onToggle: onToggle,
+                onUpdate: onUpdate,
+              );
+            },
+          ),
         ),
 
         TextButton.icon(
-          onPressed: widget.onAdd,
+          onPressed: onAdd,
           icon: const Icon(Icons.add),
           label: const Text('Add Item'),
         ),

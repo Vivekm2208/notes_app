@@ -3,6 +3,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
+import 'package:notes_app/core/features/notes/domain/entities/note.dart';
 
 class NotificationService {
   NotificationService._();
@@ -71,6 +72,7 @@ class NotificationService {
     required String title,
     required String body,
     required DateTime scheduledTime,
+    required ReminderRecurrence recurrence,
   }) async {
     final scheduledDate = tz.TZDateTime.from(scheduledTime, tz.local);
 
@@ -101,7 +103,7 @@ class NotificationService {
       scheduledDate: scheduledDate,
       notificationDetails: notificationDetails,
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-      matchDateTimeComponents: null,
+      matchDateTimeComponents: _dateTimeComponents(recurrence),
       payload: id.toString(),
     );
 
@@ -142,5 +144,24 @@ class NotificationService {
       body: 'If you see this, notifications work.',
       notificationDetails: details,
     );
+  }
+
+  DateTimeComponents? _dateTimeComponents(ReminderRecurrence recurrence) {
+    switch (recurrence) {
+      case ReminderRecurrence.none:
+        return null;
+
+      case ReminderRecurrence.daily:
+        return DateTimeComponents.time;
+
+      case ReminderRecurrence.weekly:
+        return DateTimeComponents.dayOfWeekAndTime;
+
+      case ReminderRecurrence.monthly:
+        return DateTimeComponents.dayOfMonthAndTime;
+
+      case ReminderRecurrence.yearly:
+        return DateTimeComponents.dateAndTime;
+    }
   }
 }
