@@ -35,7 +35,9 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      theme: NotedTheme.dark,
+      theme: NotedTheme.light,
+      darkTheme: NotedTheme.dark,
+      themeMode: ThemeMode.system,
       debugShowCheckedModeBanner: false,
       home: NotesScreen(),
     );

@@ -13,7 +13,10 @@ final class NotedTypography {
     fontWeight: FontWeight.bold,
     fontSize: 24,
   );
-  static const TextStyle body = TextStyle(fontFamily: 'SpaceMono');
+  static const TextStyle body = TextStyle(
+    fontFamily: 'SpaceMono',
+    fontSize: 12,
+  );
 
   static const TextStyle caption = TextStyle(
     fontFamily: 'SpaceMono',

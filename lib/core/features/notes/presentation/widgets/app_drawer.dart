@@ -21,7 +21,7 @@ class AppDrawer extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                Icon(Icons.notes, color: Colors.white, size: 40),
+                Icon(Icons.notes, size: 40),
                 SizedBox(height: 12),
                 Text('NOTED', style: Theme.of(context).textTheme.titleMedium),
 

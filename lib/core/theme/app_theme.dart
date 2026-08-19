@@ -8,35 +8,83 @@ class NotedTheme {
 
   static ThemeData get dark {
     return ThemeData(
-      scaffoldBackgroundColor: NotedColors.background,
+      brightness: Brightness.dark,
+
+      scaffoldBackgroundColor: NotedColors.darkBackground,
+
       colorScheme: const ColorScheme.dark(
         primary: NotedColors.accent,
-        surface: NotedColors.surface,
-        onSurface: NotedColors.textPrimary,
-        surfaceContainerHighest: NotedColors.surfaceVariant,
-        outline: NotedColors.border,
+        surface: NotedColors.darkSurface,
+        onSurface: NotedColors.darkTextPrimary,
+        surfaceContainerHighest: NotedColors.darkSurfaceVariant,
+        outline: NotedColors.darkBorder,
       ),
 
       textTheme: TextTheme(
         titleMedium: NotedTypography.title.copyWith(
-          color: NotedColors.textPrimary,
+          color: NotedColors.darkTextPrimary,
         ),
         bodyMedium: NotedTypography.body.copyWith(
-          color: NotedColors.textSecondary,
+          color: NotedColors.darkTextSecondary,
         ),
         bodySmall: NotedTypography.caption.copyWith(
-          color: NotedColors.textMuted,
+          color: NotedColors.darkTextMuted,
         ),
         titleLarge: NotedTypography.appTitle.copyWith(
-          color: NotedColors.textPrimary,
+          color: NotedColors.darkTextPrimary,
         ),
       ),
+
       cardTheme: CardThemeData(
-        color: NotedColors.surface,
+        color: NotedColors.darkSurface,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(NotedRadius.xs),
         ),
       ),
+
+      listTileTheme: const ListTileThemeData(
+        contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        visualDensity: VisualDensity.compact,
+      ),
+    );
+  }
+
+  static ThemeData get light {
+    return ThemeData(
+      brightness: Brightness.light,
+
+      scaffoldBackgroundColor: NotedColors.lightBackground,
+
+      colorScheme: const ColorScheme.light(
+        primary: NotedColors.accent,
+        surface: NotedColors.lightSurface,
+        onSurface: NotedColors.lightTextPrimary,
+        surfaceContainerHighest: NotedColors.lightSurfaceVariant,
+        outline: NotedColors.lightBorder,
+      ),
+
+      textTheme: TextTheme(
+        titleMedium: NotedTypography.title.copyWith(
+          color: NotedColors.lightTextPrimary,
+        ),
+        bodyMedium: NotedTypography.body.copyWith(
+          color: NotedColors.lightTextSecondary,
+        ),
+        bodySmall: NotedTypography.caption.copyWith(
+          color: NotedColors.lightTextMuted,
+        ),
+        titleLarge: NotedTypography.appTitle.copyWith(
+          color: NotedColors.lightTextPrimary,
+        ),
+      ),
+
+      cardTheme: CardThemeData(
+        color: NotedColors.lightSurface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(NotedRadius.xs),
+        ),
+      ),
+
       listTileTheme: const ListTileThemeData(
         contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         visualDensity: VisualDensity.compact,

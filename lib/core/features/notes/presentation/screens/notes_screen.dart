@@ -10,7 +10,6 @@ import 'package:notes_app/core/features/notes/presentation/widgets/note_card.dar
 import 'package:notes_app/core/features/notes/presentation/widgets/note_search_field.dart';
 
 import 'package:notes_app/core/theme/app_spacing.dart';
-import 'package:notes_app/core/theme/noted_colors.dart';
 import 'package:provider/provider.dart';
 import 'package:notes_app/core/features/notes/presentation/widgets/app_drawer.dart';
 
@@ -39,8 +38,7 @@ class _NotesScreenState extends State<NotesScreen> {
                 onChanged: context.read<NotesProvider>().updateSearchQuery,
               )
             : Text('NOTED', style: Theme.of(context).textTheme.titleLarge),
-        backgroundColor: NotedColors.background,
-        surfaceTintColor: Colors.transparent,
+
         elevation: 0,
         actions: [
           if (!_isSearching)
@@ -130,14 +128,13 @@ class _NotesScreenState extends State<NotesScreen> {
                               key: ValueKey(note.id),
                               direction: DismissDirection.horizontal,
                               background: Container(
-                                color: NotedColors.surfaceVariant,
                                 alignment: Alignment.centerRight,
                                 padding: EdgeInsets.only(
                                   right: NotedSpacing.md,
                                 ),
                                 child: Row(
                                   children: [
-                                    Icon(Icons.archive, color: Colors.white),
+                                    Icon(Icons.archive),
                                     Text(
                                       'Archive',
                                       style: Theme.of(
@@ -148,7 +145,6 @@ class _NotesScreenState extends State<NotesScreen> {
                                 ),
                               ),
                               secondaryBackground: Container(
-                                color: NotedColors.surfaceVariant,
                                 alignment: Alignment.centerLeft,
                                 padding: EdgeInsets.only(left: NotedSpacing.md),
                                 child: Row(
@@ -160,10 +156,7 @@ class _NotesScreenState extends State<NotesScreen> {
                                         context,
                                       ).textTheme.titleMedium,
                                     ),
-                                    Icon(
-                                      Icons.delete_outlined,
-                                      color: Colors.white,
-                                    ),
+                                    Icon(Icons.delete_outlined),
                                   ],
                                 ),
                               ),
@@ -213,8 +206,7 @@ class _NotesScreenState extends State<NotesScreen> {
             Text/Checklist
              */
       floatingActionButton: FloatingActionButton(
-        foregroundColor: NotedColors.surface,
-        backgroundColor: NotedColors.accent,
+        shape: const CircleBorder(),
         onPressed: () async {
           final type = await showModalBottomSheet<NoteType>(
             context: context,
