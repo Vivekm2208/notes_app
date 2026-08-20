@@ -15,7 +15,7 @@ final class NotedTypography {
   );
   static const TextStyle body = TextStyle(
     fontFamily: 'SpaceMono',
-    fontSize: 12,
+    fontSize: 16,
   );
 
   static const TextStyle caption = TextStyle(

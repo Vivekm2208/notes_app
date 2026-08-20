@@ -88,6 +88,7 @@ class _ChecklistItemTileState extends State<ChecklistItemTile> {
             controller: _controller,
             focusNode: _focusNode,
             style: TextStyle(
+              fontFamily: 'SpaceMono',
               decoration: widget.item.isCompleted
                   ? TextDecoration.lineThrough
                   : TextDecoration.none,

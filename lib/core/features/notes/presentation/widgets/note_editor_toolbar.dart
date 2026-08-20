@@ -57,12 +57,7 @@ class NoteEditorToolbar extends StatelessWidget {
             icon: const Icon(Icons.color_lens_outlined),
           ),
         ),
-        Expanded(
-          child: IconButton(
-            onPressed: () {},
-            icon: const Icon(Icons.format_paint_outlined),
-          ),
-        ),
+
         Expanded(
           child: IconButton(
             onPressed: () {

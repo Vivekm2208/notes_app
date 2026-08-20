@@ -48,7 +48,10 @@ class ChecklistEditor extends StatelessWidget {
         TextButton.icon(
           onPressed: onAdd,
           icon: const Icon(Icons.add),
-          label: const Text('Add Item'),
+          label: Text(
+            'Add Item',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
         ),
       ],
     );

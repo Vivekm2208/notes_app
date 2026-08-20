@@ -32,6 +32,7 @@ class _NotesScreenState extends State<NotesScreen> {
       //App Drawer
       drawer: AppDrawer(selected: DrawerItem.notes),
       appBar: AppBar(
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         title: _isSearching
             //Searching feature
             ? NoteSearchfield(
