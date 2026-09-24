@@ -2,14 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:notes_app/core/features/notes/domain/entities/note.dart';
 import 'package:notes_app/core/features/notes/presentation/provider/notes_provider.dart';
 import 'package:notes_app/core/features/notes/presentation/screens/add_note_screen.dart';
-import 'package:notes_app/core/features/notes/presentation/screens/edit_note_screen.dart';
+
 import 'package:notes_app/core/features/notes/presentation/widgets/category_filterbar.dart';
 import 'package:notes_app/core/features/notes/presentation/widgets/create_note_bottom_sheet.dart';
-import 'package:notes_app/core/features/notes/presentation/widgets/note_action_sheet.dart';
-import 'package:notes_app/core/features/notes/presentation/widgets/note_card.dart';
-import 'package:notes_app/core/features/notes/presentation/widgets/note_search_field.dart';
 
-import 'package:notes_app/core/theme/app_spacing.dart';
+import 'package:notes_app/core/features/notes/presentation/widgets/note_search_field.dart';
+import 'package:notes_app/core/features/notes/presentation/widgets/notes_view_options.dart';
+
 import 'package:provider/provider.dart';
 import 'package:notes_app/core/features/notes/presentation/widgets/app_drawer.dart';
 
@@ -62,6 +61,23 @@ class _NotesScreenState extends State<NotesScreen> {
               },
               icon: const Icon(Icons.close),
             ),
+          IconButton(
+            onPressed: () {
+              setState(() {
+                final provider = context.read<NotesProvider>();
+                provider.updateViewType(
+                  provider.viewType == NoteViewType.gridView
+                      ? NoteViewType.listView
+                      : NoteViewType.gridView,
+                );
+              });
+            },
+            icon: Icon(
+              provider.viewType == NoteViewType.gridView
+                  ? Icons.view_list_outlined
+                  : Icons.grid_view_outlined,
+            ),
+          ),
           //Sorting feature
           PopupMenuButton<SortType>(
             onSelected: (value) {
@@ -119,85 +135,15 @@ class _NotesScreenState extends State<NotesScreen> {
                       ? const Center(child: Text('No notes yet!'))
                       : notes.isEmpty
                       ? const Center(child: Text('No notes found!'))
-                      : ListView.separated(
-                          padding: const EdgeInsets.all(16),
-                          itemCount: notes.length,
-                          itemBuilder: (context, index) {
-                            final note = notes[index];
-
-                            return Dismissible(
-                              key: ValueKey(note.id),
-                              direction: DismissDirection.horizontal,
-                              background: Container(
-                                alignment: Alignment.centerRight,
-                                padding: EdgeInsets.only(
-                                  right: NotedSpacing.md,
-                                ),
-                                child: Row(
-                                  children: [
-                                    Icon(Icons.archive),
-                                    Text(
-                                      'Archive',
-                                      style: Theme.of(
-                                        context,
-                                      ).textTheme.titleMedium,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              secondaryBackground: Container(
-                                alignment: Alignment.centerLeft,
-                                padding: EdgeInsets.only(left: NotedSpacing.md),
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.end,
-                                  children: [
-                                    Text(
-                                      'Delete',
-                                      style: Theme.of(
-                                        context,
-                                      ).textTheme.titleMedium,
-                                    ),
-                                    Icon(Icons.delete_outlined),
-                                  ],
-                                ),
-                              ),
-                              onDismissed: (direction) async {
-                                if (direction == DismissDirection.endToStart) {
-                                  await context
-                                      .read<NotesProvider>()
-                                      .moveToTrash(note);
-                                } else if (direction ==
-                                    DismissDirection.startToEnd) {
-                                  await context
-                                      .read<NotesProvider>()
-                                      .archiveNote(note);
-                                }
-                              },
-                              //NoteCard
-                              child: NoteCard(
-                                note: note,
-                                onTap: () async {
-                                  await Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (context) =>
-                                          EditNoteScreen(note: note),
-                                    ),
-                                  );
-                                },
-                                onLongPress: () {
-                                  showModalBottomSheet(
-                                    context: context,
-                                    builder: (context) {
-                                      return NoteActionSheet(note: note);
-                                    },
-                                  );
-                                },
-                              ),
-                            );
+                      : NotesViewOptions(
+                          onLeftSwipeText: 'Delete',
+                          notes: notes,
+                          onLeftSwipe: (note) async {
+                            await provider.moveToTrash(note);
                           },
-                          separatorBuilder: (context, index) {
-                            return const SizedBox(height: 12);
+                          onRghtSwipeText: 'Archive',
+                          onRightSwipe: (note) async {
+                            await provider.archiveNote(note);
                           },
                         ),
                 ),

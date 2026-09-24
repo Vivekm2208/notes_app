@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 class NoteColors {
   static const List<Color> colors = [
-    Colors.white,
+    Colors.grey,
     Color.fromARGB(255, 250, 225, 2),
     Color.fromARGB(255, 2, 213, 9),
     Color.fromARGB(255, 1, 138, 251),

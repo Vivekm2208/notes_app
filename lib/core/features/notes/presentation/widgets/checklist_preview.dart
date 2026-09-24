@@ -8,33 +8,43 @@ class ChecklistPreview extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        ...items.take(3).map((item) {
-          return Row(
-            children: [
-              Icon(
-                item.isCompleted
-                    ? Icons.check_box
-                    : Icons.check_box_outline_blank,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        debugPrint(
+          'ChecklistPreview constraints: '
+          'minHeight=${constraints.minHeight}, '
+          'maxHeight=${constraints.maxHeight}',
+        );
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ...items.take(3).map((item) {
+              return Row(
+                children: [
+                  Icon(
+                    item.isCompleted
+                        ? Icons.check_box
+                        : Icons.check_box_outline_blank,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      item.text,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              );
+            }),
+            if (items.length > 3)
+              Text(
+                "+${items.length - 3} more",
+                style: Theme.of(context).textTheme.bodySmall,
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  item.text,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
-          );
-        }),
-        if (items.length > 3)
-          Text(
-            "+${items.length - 3} more",
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-      ],
+          ],
+        );
+      },
     );
   }
 }

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_quill/flutter_quill.dart';
 import 'package:notes_app/core/features/notes/domain/entities/checklist_item.dart';
 import 'package:notes_app/core/features/notes/domain/entities/note.dart';
 import 'package:notes_app/core/features/notes/presentation/provider/notes_provider.dart';
@@ -7,6 +8,8 @@ import 'package:notes_app/core/features/notes/presentation/widgets/checklist_edi
 import 'package:notes_app/core/features/notes/presentation/widgets/note_editor_header.dart';
 import 'package:notes_app/core/features/notes/presentation/widgets/note_editor_toolbar.dart';
 import 'package:notes_app/core/services/notification_service.dart';
+import 'package:notes_app/core/services/rich_text_converter.dart';
+import 'package:notes_app/core/theme/app_radius.dart';
 import 'package:notes_app/core/theme/app_spacing.dart';
 import 'package:notes_app/core/utils/id_generator.dart';
 import 'package:notes_app/core/utils/string_formatter.dart';
@@ -32,6 +35,7 @@ class _EditNoteScreenState extends State<EditNoteScreen> {
   late String? _focusedItemId;
   final _formKey = GlobalKey<FormState>();
   late List<ChecklistItem> _items;
+  late final QuillController _quillController;
   late final TextEditingController _titleController;
 
   @override
@@ -39,6 +43,9 @@ class _EditNoteScreenState extends State<EditNoteScreen> {
     _titleController.dispose();
     _contentController.dispose();
     _descriptionController.dispose();
+    if (widget.note.type == NoteType.text) {
+      _quillController.dispose();
+    }
     super.dispose();
   }
 
@@ -48,10 +55,17 @@ class _EditNoteScreenState extends State<EditNoteScreen> {
 
     _titleController = TextEditingController(text: widget.note.title);
 
-    _contentController = TextEditingController(
-      text: widget.note.type == NoteType.text ? widget.note.content : '',
-    );
+    _contentController = TextEditingController();
+    if (widget.note.type == NoteType.text) {
+      final document = widget.note.contentFormat == NoteContentFormat.plainText
+          ? RichTextConverter.plainTextToDocument(widget.note.content)
+          : RichTextConverter.jsonToDocument(widget.note.content);
 
+      _quillController = QuillController(
+        document: document,
+        selection: const TextSelection.collapsed(offset: 0),
+      );
+    }
     _descriptionController = TextEditingController(
       text: widget.note.type == NoteType.checklist ? widget.note.content : '',
     );
@@ -65,8 +79,49 @@ class _EditNoteScreenState extends State<EditNoteScreen> {
     _focusedItemId = widget.note.id;
   }
 
+  String _getNotificationBody() {
+    if (widget.note.type == NoteType.text) {
+      return RichTextConverter.documentToPlainText(_quillController.document);
+    }
+
+    return _descriptionController.text.trim();
+  }
+
+  bool _isAttributeActive(Attribute attribute) {
+    final style = _quillController.getSelectionStyle();
+
+    return style.containsKey(attribute.key);
+  }
+
+  void _toggleAttribute(Attribute attribute) {
+    final isActive = _isAttributeActive(attribute);
+
+    if (isActive) {
+      _quillController.formatSelection(Attribute.clone(attribute, null));
+    } else {
+      _quillController.formatSelection(attribute);
+    }
+  }
+
+  bool _hasContent() {
+    final title = _titleController.text.trim();
+
+    if (widget.note.type == NoteType.text) {
+      final content = _quillController.document.toPlainText().trim();
+
+      return title.isNotEmpty || content.isNotEmpty;
+    }
+
+    final description = _descriptionController.text.trim();
+
+    return title.isNotEmpty || description.isNotEmpty || _items.isNotEmpty;
+  }
+
   Future<void> _saveNote() async {
     if (!_formKey.currentState!.validate()) {
+      return;
+    }
+    if (!_hasContent()) {
       return;
     }
 
@@ -75,7 +130,7 @@ class _EditNoteScreenState extends State<EditNoteScreen> {
     final navigator = Navigator.of(context);
 
     final content = widget.note.type == NoteType.text
-        ? _contentController.text
+        ? RichTextConverter.documentToJsonString(_quillController.document)
         : _descriptionController.text;
 
     // A recurrence without a reminder is invalid.
@@ -115,7 +170,7 @@ class _EditNoteScreenState extends State<EditNoteScreen> {
         await NotificationService.instance.scheduleNotification(
           id: notificationId,
           title: _titleController.text.trim(),
-          body: content.trim(),
+          body: _getNotificationBody(),
           scheduledTime: selectedReminder!,
           recurrence: recurrence,
         );
@@ -124,6 +179,9 @@ class _EditNoteScreenState extends State<EditNoteScreen> {
       final updatedNote = widget.note.copyWith(
         title: _titleController.text.trim(),
         content: content,
+        contentFormat: widget.note.type == NoteType.text
+            ? NoteContentFormat.richText
+            : widget.note.contentFormat,
         checklistItems: widget.note.type == NoteType.checklist
             ? _items
             : widget.note.checklistItems,
@@ -176,7 +234,7 @@ class _EditNoteScreenState extends State<EditNoteScreen> {
                     onSave: _saveNote,
                   ),
 
-                  const SizedBox(height: NotedSpacing.md),
+                  const SizedBox(height: 8),
 
                   /*
                    * CATEGORY
@@ -202,7 +260,7 @@ class _EditNoteScreenState extends State<EditNoteScreen> {
                     ),
                   ),
 
-                  const SizedBox(height: NotedSpacing.md),
+                  const SizedBox(height: 4),
 
                   /*
                    * TITLE
@@ -220,24 +278,25 @@ class _EditNoteScreenState extends State<EditNoteScreen> {
                     ),
                   ),
 
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 4),
 
                   /*
                    * CONTENT / CHECKLIST
                    */
                   if (isTextNote)
                     Expanded(
-                      child: TextField(
-                        controller: _contentController,
-                        maxLines: null,
-                        expands: true,
-                        textAlignVertical: TextAlignVertical.top,
-                        style: Theme.of(context).textTheme.bodyMedium,
-
-                        decoration: InputDecoration(
-                          hintText: 'Start Typing...',
-                          hintStyle: Theme.of(context).textTheme.bodyMedium,
-                          border: InputBorder.none,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          border: Border.all(
+                            color: Theme.of(context).colorScheme.outline,
+                          ),
+                          borderRadius: BorderRadius.circular(NotedRadius.sm),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.all(8.0),
+                          child: QuillEditor.basic(
+                            controller: _quillController,
+                          ),
                         ),
                       ),
                     )
@@ -306,38 +365,48 @@ class _EditNoteScreenState extends State<EditNoteScreen> {
                     ),
                   ],
 
-                  const SizedBox(height: NotedSpacing.md),
+                  const SizedBox(height: 8),
 
                   /*
                    * TOOLBAR
                    */
-                  NoteEditorToolbar(
-                    selectedColor: selectedColor,
-                    onSelectedColor: (color) {
-                      setState(() {
-                        selectedColor = color;
-                      });
-                    },
+                  Container(
+                    decoration: BoxDecoration(
+                      border: Border.all(
+                        color: Theme.of(context).colorScheme.outline,
+                      ),
+                      borderRadius: BorderRadius.circular(NotedRadius.sm),
+                    ),
+                    child: NoteEditorToolbar(
+                      selectedColor: selectedColor,
+                      onSelectedColor: (color) {
+                        setState(() {
+                          selectedColor = color;
+                        });
+                      },
 
-                    reminder: selectedReminder,
-                    onSelectedReminder: (reminder) {
-                      setState(() {
-                        selectedReminder = reminder;
+                      reminder: selectedReminder,
+                      onSelectedReminder: (reminder) {
+                        setState(() {
+                          selectedReminder = reminder;
 
-                        if (reminder == null) {
-                          selectedRecurrence = ReminderRecurrence.none;
-                        }
-                      });
-                    },
+                          if (reminder == null) {
+                            selectedRecurrence = ReminderRecurrence.none;
+                          }
+                        });
+                      },
 
-                    recurrence: selectedRecurrence,
-                    onSelectedRecurrence: (recurrence) {
-                      setState(() {
-                        selectedRecurrence = recurrence;
-                      });
-                    },
-
-                    onFormat: () {},
+                      recurrence: selectedRecurrence,
+                      onSelectedRecurrence: (recurrence) {
+                        setState(() {
+                          selectedRecurrence = recurrence;
+                        });
+                      },
+                      controller: isTextNote ? _quillController : null,
+                      onFormat: (attribute) {
+                        _toggleAttribute(attribute);
+                      },
+                    ),
                   ),
                 ],
               ),

@@ -10,11 +10,14 @@ enum NoteType { text, checklist }
 
 enum ReminderRecurrence { none, daily, weekly, monthly, yearly }
 
+enum NoteContentFormat { plainText, richText }
+
 class Note {
   const Note({
     required this.title,
     required this.id,
     required this.content,
+    required this.contentFormat,
     this.type = NoteType.text,
     this.checklistItems = const [],
     this.category = NoteCategory.personal,
@@ -32,6 +35,7 @@ class Note {
   final List<ChecklistItem> checklistItems;
   final int colorValue;
   final String content;
+  final NoteContentFormat contentFormat;
   final DateTime createdAt;
   final String id;
   final bool isPinned;
@@ -49,6 +53,7 @@ class Note {
     String? id,
     String? title,
     String? content,
+    NoteContentFormat? contentFormat,
     NoteType? type,
     List<ChecklistItem>? checklistItems,
     bool? isPinned,
@@ -65,6 +70,7 @@ class Note {
       id: id ?? this.id,
       title: title ?? this.title,
       content: content ?? this.content,
+      contentFormat: contentFormat ?? this.contentFormat,
       type: type ?? this.type,
       checklistItems: checklistItems ?? this.checklistItems,
       isPinned: isPinned ?? this.isPinned,

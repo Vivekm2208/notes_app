@@ -4,11 +4,12 @@ import 'package:notes_app/core/features/notes/domain/repositories/note_repositor
 import 'package:notes_app/core/features/notes/domain/entities/note.dart';
 import 'package:notes_app/core/services/notification_service.dart';
 
+enum NoteViewType { listView, gridView }
+
 class NotesProvider extends ChangeNotifier {
   NotesProvider({required this.repositories});
 
   final NoteRepositories repositories;
-
   bool _isLoading = false;
   List<Note> _notes = [];
   String _searchQuery = '';
@@ -30,6 +31,15 @@ class NotesProvider extends ChangeNotifier {
   List<Note> get archivedNotes => _filterNotes(NoteStatus.archived);
 
   List<Note> get trashedNotes => _filterNotes(NoteStatus.trashed);
+
+  NoteViewType _viewType = NoteViewType.gridView;
+
+  NoteViewType get viewType => _viewType;
+
+  void updateViewType(NoteViewType type) async {
+    _viewType = type;
+    notifyListeners();
+  }
 
   void updateSearchQuery(String value) async {
     _searchQuery = value;

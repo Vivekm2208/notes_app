@@ -6,6 +6,7 @@ class NoteModel extends Note {
     required super.id,
     required super.title,
     required super.content,
+    super.contentFormat = NoteContentFormat.plainText,
     required super.type,
     super.checklistItems = const [],
     super.isPinned = false,
@@ -24,6 +25,7 @@ class NoteModel extends Note {
       id: note.id,
       title: note.title,
       content: note.content,
+      contentFormat: note.contentFormat,
       type: note.type,
       checklistItems: note.checklistItems,
       isPinned: note.isPinned,
@@ -43,6 +45,9 @@ class NoteModel extends Note {
       id: map['id'] as String,
       title: map['title'] as String,
       content: map['content'] as String,
+      contentFormat: NoteContentFormat.values.byName(
+        map['contentFormat'] ?? 'plainText',
+      ),
       type: NoteType.values.byName(map['type'] ?? 'text'),
       checklistItems:
           (map['checklistItems'] as List?)
@@ -77,6 +82,7 @@ class NoteModel extends Note {
       'id': id,
       'title': title,
       'content': content,
+      'contentFormat': contentFormat.name,
       'type': type.name,
       'checklistItems': checklistItems
           .map((item) => ChecklistItemModel.fromEntity(item).toMap())
