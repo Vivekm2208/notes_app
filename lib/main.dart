@@ -2,11 +2,12 @@ import 'package:flutter/material.dart';
 //import 'package:flutter_quill/flutter_quill.dart';
 import 'package:hive_flutter/adapters.dart';
 import 'package:notes_app/core/features/notes/presentation/provider/notes_provider.dart';
+import 'package:notes_app/core/features/notes/presentation/screens/login_screen.dart';
 //import 'package:notes_app/core/features/rich_text_test/rich_text_test_screen.dart';
 import 'package:notes_app/core/services/notification_service.dart';
 import 'core/features/notes/data/datasources/local_note_datasources.dart';
 import 'core/features/notes/data/repositories/note_repository_impl.dart';
-import 'core/features/notes/presentation/screens/notes_screen.dart';
+
 import 'package:provider/provider.dart';
 import 'package:notes_app/core/theme/app_theme.dart';
 //import 'package:flutter_localizations/flutter_localizations.dart';
@@ -50,7 +51,7 @@ class MyApp extends StatelessWidget {
       // ],
 
       // supportedLocales: FlutterQuillLocalizations.supportedLocales,
-      home: const NotesScreen(),
+      home: const LoginScreen(),
     );
   }
 }
