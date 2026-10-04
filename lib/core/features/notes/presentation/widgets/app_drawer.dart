@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:notes_app/core/features/notes/presentation/provider/notes_provider.dart';
 import 'package:notes_app/core/features/notes/presentation/screens/archive_screen.dart';
 import 'package:notes_app/core/features/notes/presentation/screens/notes_screen.dart';
 import 'package:notes_app/core/features/notes/presentation/screens/trash_screen.dart';
+import 'package:provider/provider.dart';
 
 enum DrawerItem { notes, archive, trash }
 
@@ -41,6 +43,7 @@ class AppDrawer extends StatelessWidget {
             ),
             onTap: () {
               if (selected != DrawerItem.notes) {
+                context.read<NotesProvider>().updateSearchQuery('');
                 Navigator.pop(context);
 
                 Navigator.pushReplacement(
@@ -62,6 +65,7 @@ class AppDrawer extends StatelessWidget {
             ),
             onTap: () {
               if (selected != DrawerItem.archive) {
+                context.read<NotesProvider>().updateSearchQuery('');
                 Navigator.pop(context);
 
                 Navigator.pushReplacement(
@@ -83,6 +87,7 @@ class AppDrawer extends StatelessWidget {
             ),
             onTap: () {
               if (selected != DrawerItem.trash) {
+                context.read<NotesProvider>().updateSearchQuery('');
                 Navigator.pop(context);
 
                 Navigator.pushReplacement(

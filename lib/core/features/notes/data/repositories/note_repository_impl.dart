@@ -21,7 +21,9 @@ class NoteRepositoryImpl implements NoteRepositories {
 
   @override
   Future<List<Note>> getNotes() async {
-    return datasource.getNotes();
+    final models = await datasource.getNotes();
+
+    return List<Note>.from(models);
   }
 
   @override

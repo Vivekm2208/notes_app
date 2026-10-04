@@ -63,14 +63,12 @@ class _NotesScreenState extends State<NotesScreen> {
             ),
           IconButton(
             onPressed: () {
-              setState(() {
-                final provider = context.read<NotesProvider>();
-                provider.updateViewType(
-                  provider.viewType == NoteViewType.gridView
-                      ? NoteViewType.listView
-                      : NoteViewType.gridView,
-                );
-              });
+              final provider = context.read<NotesProvider>();
+              provider.updateViewType(
+                provider.viewType == NoteViewType.gridView
+                    ? NoteViewType.listView
+                    : NoteViewType.gridView,
+              );
             },
             icon: Icon(
               provider.viewType == NoteViewType.gridView

@@ -24,31 +24,37 @@ class NoteActionSheet extends StatelessWidget {
             NoteActionOptions(
               title: note.isPinned ? 'UnPin Note' : 'Pin Note',
               icon: note.isPinned ? Icons.push_pin : Icons.push_pin_outlined,
-              onTap: () {
-                context.read<NotesProvider>().togglePin(note);
-                Navigator.pop(context);
+              onTap: () async {
+                await context.read<NotesProvider>().togglePin(note);
+                if (context.mounted) {
+                  Navigator.pop(context);
+                }
               },
             ),
             NoteActionOptions(
               title: 'Archive Note',
               icon: Icons.archive,
-              onTap: () {
-                context.read<NotesProvider>().archiveNote(note);
-                Navigator.pop(context);
+              onTap: () async {
+                await context.read<NotesProvider>().archiveNote(note);
+                if (context.mounted) {
+                  Navigator.pop(context);
+                }
               },
             ),
             NoteActionOptions(
               title: 'Delete Note',
               icon: Icons.delete,
-              onTap: () {
-                context.read<NotesProvider>().moveToTrash(note);
-                Navigator.pop(context);
+              onTap: () async {
+                await context.read<NotesProvider>().moveToTrash(note);
+                if (context.mounted) {
+                  Navigator.pop(context);
+                }
               },
             ),
             NoteActionOptions(
               title: 'Cancel',
               icon: Icons.cancel,
-              onTap: () {
+              onTap: () async {
                 Navigator.pop(context);
               },
             ),

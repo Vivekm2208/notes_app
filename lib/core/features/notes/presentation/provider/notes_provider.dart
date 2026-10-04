@@ -10,11 +10,13 @@ class NotesProvider extends ChangeNotifier {
   NotesProvider({required this.repositories});
 
   final NoteRepositories repositories;
+
   bool _isLoading = false;
   List<Note> _notes = [];
   String _searchQuery = '';
   NoteCategory? _selectedCategory;
   SortType _sortType = SortType.recent;
+  NoteViewType _viewType = NoteViewType.gridView;
 
   NoteCategory? get selectedCategory => _selectedCategory;
 
@@ -32,16 +34,14 @@ class NotesProvider extends ChangeNotifier {
 
   List<Note> get trashedNotes => _filterNotes(NoteStatus.trashed);
 
-  NoteViewType _viewType = NoteViewType.gridView;
-
   NoteViewType get viewType => _viewType;
 
-  void updateViewType(NoteViewType type) async {
+  void updateViewType(NoteViewType type) {
     _viewType = type;
     notifyListeners();
   }
 
-  void updateSearchQuery(String value) async {
+  void updateSearchQuery(String value) {
     _searchQuery = value;
     notifyListeners();
   }
@@ -60,30 +60,45 @@ class NotesProvider extends ChangeNotifier {
   Future<void> loadNotes() async {
     _isLoading = true;
     notifyListeners();
+    try {
+      _notes = await repositories.getNotes();
 
-    _notes = await repositories.getNotes();
-
-    _sortNotes();
-
-    _isLoading = false;
-    notifyListeners();
+      _sortNotes();
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
   }
 
   Future<void> addNote(Note note) async {
     await repositories.addNote(note);
 
-    await loadNotes();
+    _notes.add(note);
+
+    _sortNotes();
+    notifyListeners();
   }
 
   Future<void> deleteNote(String id) async {
     await repositories.deleteNote(id);
 
-    await loadNotes();
+    _notes.removeWhere((note) => note.id == id);
+
+    notifyListeners();
   }
 
   Future<void> updateNote(Note note) async {
+    final index = notes.indexWhere(
+      (existingNote) => existingNote.id == note.id,
+    );
+
+    if (index != -1) {
+      _notes[index] = note;
+    }
+    _sortNotes();
+    notifyListeners();
+
     await repositories.updateNote(note);
-    await loadNotes();
   }
 
   Future<void> togglePin(Note note) async {
@@ -126,8 +141,8 @@ class NotesProvider extends ChangeNotifier {
 
   Future<void> toggleCheckListItem(Note note, String itemId) async {
     final updatedItems = note.checklistItems.map((item) {
-      if (item.id == item.id) {
-        return item.copyWith(isCompleted: item.isCompleted);
+      if (item.id == itemId) {
+        return item.copyWith(isCompleted: !item.isCompleted);
       }
       return item;
     }).toList();
@@ -178,9 +193,17 @@ class NotesProvider extends ChangeNotifier {
           .toList();
     }
     if (_searchQuery.isNotEmpty) {
+      final query = _searchQuery.toLowerCase();
+
       filtered = filtered.where((note) {
-        return note.title.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-            note.content.toLowerCase().contains(_searchQuery.toLowerCase());
+        final matchesTitle = note.title.toLowerCase().contains(query);
+        final matchesContent = note.content.toLowerCase().contains(query);
+
+        final matchesChecklist = note.checklistItems.any(
+          (item) => item.text.toLowerCase().contains(query),
+        );
+
+        return matchesTitle || matchesContent || matchesChecklist;
       }).toList();
     }
     return filtered;

@@ -10,7 +10,7 @@ class NoteActionOptions extends StatelessWidget {
 
   final String title;
   final IconData icon;
-  final VoidCallback onTap;
+  final Future<void> Function() onTap;
 
   @override
   Widget build(BuildContext context) {

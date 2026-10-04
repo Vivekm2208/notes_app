@@ -13,10 +13,6 @@ class CategoryFilterbar extends StatelessWidget {
   final ValueChanged<NoteCategory?> onChanged;
   final NoteCategory? selectedCategory;
 
-  String capitalize(String text) {
-    return StringFormatter.capitalize(text);
-  }
-
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
