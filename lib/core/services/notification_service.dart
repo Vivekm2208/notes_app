@@ -36,10 +36,6 @@ class NotificationService {
 
     tz.setLocalLocation(tz.getLocation(timezone));
 
-    debugPrint('Device Timezone : ${timezoneInfo.identifier}');
-    debugPrint('Using Timezone  : $timezone');
-    debugPrint('TZ Local        : ${tz.local.name}');
-
     const initializationSettings = InitializationSettings(
       android: AndroidInitializationSettings('@mipmap/ic_launcher'),
     );
@@ -76,12 +72,6 @@ class NotificationService {
   }) async {
     final scheduledDate = tz.TZDateTime.from(scheduledTime, tz.local);
 
-    debugPrint('--------------------------------');
-    debugPrint('DateTime       : $scheduledTime');
-    debugPrint('TZDateTime     : $scheduledDate');
-    debugPrint('Local Timezone : ${tz.local.name}');
-    debugPrint('--------------------------------');
-
     const notificationDetails = NotificationDetails(
       android: AndroidNotificationDetails(
         'notes_channel',
@@ -108,8 +98,6 @@ class NotificationService {
     );
 
     final pending = await _notifications.pendingNotificationRequests();
-
-    debugPrint('Pending Notifications: ${pending.length}');
 
     for (final notification in pending) {
       debugPrint(

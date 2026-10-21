@@ -8,43 +8,60 @@ class ChecklistPreview extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        debugPrint(
-          'ChecklistPreview constraints: '
-          'minHeight=${constraints.minHeight}, '
-          'maxHeight=${constraints.maxHeight}',
-        );
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ...items.take(3).map((item) {
-              return Row(
-                children: [
-                  Icon(
-                    item.isCompleted
-                        ? Icons.check_box
-                        : Icons.check_box_outline_blank,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      item.text,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
+    final theme = Theme.of(context);
+    const previewLimit = 4;
+    final visibleItems = items.take(previewLimit).toList();
+    final remainingItems = items.length - visibleItems.length;
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ...visibleItems.map((item) {
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 4),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  item.isCompleted
+                      ? Icons.check_box
+                      : Icons.check_box_outline_blank,
+                  size: 16,
+                  color: item.isCompleted
+                      ? theme.colorScheme.primary
+                      : theme.colorScheme.onSurfaceVariant,
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    item.text,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      decoration: item.isCompleted
+                          ? TextDecoration.lineThrough
+                          : TextDecoration.none,
                     ),
                   ),
-                ],
-              );
-            }),
-            if (items.length > 3)
-              Text(
-                "+${items.length - 3} more",
-                style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+            ),
+          );
+        }),
+        if (remainingItems > 0)
+          Padding(
+            padding: const EdgeInsets.only(top: 2),
+            child: Text(
+              '+$remainingItems more',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
               ),
-          ],
-        );
-      },
+            ),
+          ),
+      ],
     );
   }
 }

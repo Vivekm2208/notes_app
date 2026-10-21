@@ -34,12 +34,6 @@ class NoteCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final hasBeenEdited = note.createdAt != note.lastEdited;
-    debugPrint(
-      'Note: ${note.id} | '
-      'type: ${note.type} | '
-      'format: ${note.contentFormat} | '
-      'content: "${note.content}"',
-    );
 
     final previewContent =
         note.contentFormat == NoteContentFormat.richText &&

@@ -109,13 +109,7 @@ class _AddNoteScreenState extends State<AddNoteScreen> {
           notificationId = DateTime.now().millisecondsSinceEpoch.remainder(
             1 << 31,
           );
-          debugPrint('--------------------------------');
-          debugPrint('Current Time : ${DateTime.now()}');
-          debugPrint('Reminder Time: $selectedReminder');
-          debugPrint(
-            'Difference: ${selectedReminder!.difference(DateTime.now()).inSeconds} seconds',
-          );
-          debugPrint('--------------------------------');
+
           await NotificationService.instance.scheduleNotification(
             id: notificationId,
             title: _titleController.text,
@@ -160,8 +154,6 @@ class _AddNoteScreenState extends State<AddNoteScreen> {
   @override
   Widget build(BuildContext context) {
     final isTextNote = widget.type == NoteType.text;
-    debugPrint('AddNoteScreen type: ${widget.type}');
-    debugPrint('isTextNote: $isTextNote');
 
     return Scaffold(
       resizeToAvoidBottomInset: true,

@@ -5,8 +5,8 @@ import '../models/note_model.dart';
 class LocalNoteDatasources {
   late Box notesBox;
 
-  Future<void> init() async {
-    notesBox = await Hive.openBox('notes');
+  Future<void> init({required String userId}) async {
+    notesBox = await Hive.openBox('notes_$userId');
   }
 
   Future<void> addNote(NoteModel note) async {

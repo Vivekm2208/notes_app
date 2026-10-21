@@ -164,9 +164,7 @@ class _EditNoteScreenState extends State<EditNoteScreen> {
         notificationId ??= DateTime.now().millisecondsSinceEpoch.remainder(
           1 << 31,
         );
-        debugPrint('Reminder: $selectedReminder');
-        debugPrint('Recurrence: $recurrence');
-        debugPrint('Notification ID: $notificationId');
+
         await NotificationService.instance.scheduleNotification(
           id: notificationId,
           title: _titleController.text.trim(),
@@ -194,9 +192,7 @@ class _EditNoteScreenState extends State<EditNoteScreen> {
       );
 
       await notesProvider.updateNote(updatedNote);
-      debugPrint('Updated reminder: ${updatedNote.reminderAt}');
-      debugPrint('Updated recurrence: ${updatedNote.recurrence}');
-      debugPrint('Updated notification ID: ${updatedNote.notificationId}');
+
       if (!mounted) return;
 
       navigator.pop(true);

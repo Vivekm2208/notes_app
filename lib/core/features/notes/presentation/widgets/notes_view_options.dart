@@ -33,8 +33,9 @@ class NotesViewOptions extends StatelessWidget {
 
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 2,
-        crossAxisSpacing: 12,
-        mainAxisSpacing: 12,
+        mainAxisExtent: 220,
+        crossAxisSpacing: 10,
+        mainAxisSpacing: 10,
 
         // Start here and tune visually.
         childAspectRatio: 0.9,

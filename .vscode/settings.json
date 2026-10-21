@@ -1,4 +1,5 @@
 {
     "java.configuration.updateBuildConfiguration": "interactive",
-    "files.autoSave": "off"
+    "files.autoSave": "off",
+    "cmake.sourceDirectory": "C:/Users/vivek/Desktop/notes_app/linux"
 }
