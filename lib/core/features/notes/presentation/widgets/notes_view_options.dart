@@ -137,15 +137,23 @@ class NotesViewOptions extends StatelessWidget {
           await Navigator.push(
             context,
 
-            MaterialPageRoute(builder: (_) => EditNoteScreen(note: note)),
+            MaterialPageRoute(
+              builder: (_) => ChangeNotifierProvider<NotesProvider>.value(
+                value: context.read<NotesProvider>(),
+                child: EditNoteScreen(note: note),
+              ),
+            ),
           );
         },
 
         onLongPress: () {
           showModalBottomSheet(
             context: context,
-            builder: (_) {
-              return NoteActionSheet(note: note);
+            builder: (sheetContext) {
+              return ChangeNotifierProvider<NotesProvider>.value(
+                value: context.read<NotesProvider>(),
+                child: NoteActionSheet(note: note),
+              );
             },
           );
         },

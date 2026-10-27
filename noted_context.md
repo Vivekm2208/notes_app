@@ -35,12 +35,21 @@ The content is organized as follows:
 - Files are sorted by Git change count (files with more changes are at the bottom)
 
 # Directory Structure
-```
+````
 lib/
   core/
     constants/
       note_colors.dart
     features/
+      auth/
+        data/
+          services/
+            auth_service.dart
+        presentation/
+          screens/
+            auth_gate.dart
+            authenticated_app.dart
+          auth_text_field.dart
       notes/
         data/
           datasources/
@@ -65,6 +74,7 @@ lib/
             edit_note_screen.dart
             login_screen.dart
             notes_screen.dart
+            sign_up_screen.dart
             trash_screen.dart
           widgets/
             app_drawer.dart
@@ -104,14 +114,306 @@ lib/
       id_generator.dart
       reminder_formatter.dart
       string_formatter.dart
+  firebase_options.dart
   main.dart
 pubspec.yaml
-```
+````
 
 # Files
 
+## File: lib/core/features/auth/data/services/auth_service.dart
+````dart
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:google_sign_in/google_sign_in.dart';
+
+class AuthService {
+  final FirebaseAuth _firebaseAuth = FirebaseAuth.instance;
+  final GoogleSignIn _googleSignIn = GoogleSignIn.instance;
+
+  Future<void> initializeGoogleSignIn() async {
+    await _googleSignIn.initialize();
+  }
+
+  Future<UserCredential> signUpWithEmail({
+    required String name,
+    required String email,
+    required String password,
+  }) async {
+    final credential = await _firebaseAuth.createUserWithEmailAndPassword(
+      email: email.trim(),
+      password: password,
+    );
+
+    await credential.user?.updateDisplayName(name.trim());
+
+    return credential;
+  }
+
+  Future<UserCredential> signInWithGoogle() async {
+    await initializeGoogleSignIn();
+
+    final GoogleSignInAccount googleUser = await _googleSignIn.authenticate();
+
+    final GoogleSignInAuthentication googleAuth = googleUser.authentication;
+
+    final credential = GoogleAuthProvider.credential(
+      idToken: googleAuth.idToken,
+    );
+
+    return _firebaseAuth.signInWithCredential(credential);
+  }
+
+  Future<void> updateDisplayName(String name) async {
+    final user = _firebaseAuth.currentUser;
+
+    if (user == null) {
+      throw Exception('No user is currently signed in.');
+    }
+
+    await user.updateDisplayName(name.trim());
+    await user.reload();
+  }
+
+  Future<UserCredential> signInWithEmail({
+    required String email,
+    required String password,
+  }) async {
+    return await _firebaseAuth.signInWithEmailAndPassword(
+      email: email.trim(),
+      password: password,
+    );
+  }
+
+  Future<void> sendPasswordResetEmail({required String email}) async {
+    await _firebaseAuth.sendPasswordResetEmail(email: email.trim());
+  }
+
+  Future<void> signOut() async {
+    await _firebaseAuth.signOut();
+  }
+
+  String getAuthErrorMessage(FirebaseAuthException exception) {
+    switch (exception.code) {
+      case 'email-already-in-use':
+        return 'An account already exists with this email.';
+
+      case 'invalid-email':
+        return 'Please enter a valid email address.';
+
+      case 'weak-password':
+        return 'Your password does not meet the requirements.';
+
+      case 'user-not-found':
+      case 'wrong-password':
+      case 'invalid-credential':
+        return 'Invalid email or password.';
+
+      case 'too-many-requests':
+        return 'Too many attempts. Please try again later.';
+
+      case 'network-request-failed':
+        return 'Network error. Check your internet connection.';
+
+      default:
+        return 'Authentication failed. Please try again.';
+    }
+  }
+}
+````
+
+## File: lib/core/features/auth/presentation/screens/auth_gate.dart
+````dart
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
+import 'package:notes_app/core/features/auth/presentation/screens/authenticated_app.dart';
+
+import 'package:notes_app/core/features/notes/presentation/screens/login_screen.dart';
+
+class AuthGate extends StatelessWidget {
+  const AuthGate({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<User?>(
+      stream: FirebaseAuth.instance.authStateChanges(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+
+        final user = snapshot.data;
+
+        if (user != null) {
+          return AuthenticatedApp(key: ValueKey(user.uid), user: user);
+        }
+
+        return const LoginScreen();
+      },
+    );
+  }
+}
+````
+
+## File: lib/core/features/auth/presentation/screens/authenticated_app.dart
+````dart
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
+import 'package:notes_app/core/features/notes/data/datasources/local_note_datasources.dart';
+import 'package:notes_app/core/features/notes/data/repositories/note_repository_impl.dart';
+import 'package:notes_app/core/features/notes/presentation/provider/notes_provider.dart';
+import 'package:notes_app/core/features/notes/presentation/screens/notes_screen.dart';
+import 'package:provider/provider.dart';
+
+class AuthenticatedApp extends StatefulWidget {
+  const AuthenticatedApp({super.key, required this.user});
+
+  final User user;
+
+  @override
+  State<AuthenticatedApp> createState() => _AuthenticatedAppState();
+}
+
+class _AuthenticatedAppState extends State<AuthenticatedApp> {
+  late final Future<LocalNoteDatasources> _datasourceFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _datasourceFuture = _initializeDatasource();
+  }
+
+  Future<LocalNoteDatasources> _initializeDatasource() async {
+    final datasource = LocalNoteDatasources();
+    await datasource.init(userId: widget.user.uid);
+    return datasource;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<LocalNoteDatasources>(
+      future: _datasourceFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+
+        if (snapshot.hasError) {
+          debugPrint('Datasource initialization failed: ${snapshot.error}');
+
+          return const Scaffold(
+            body: Center(
+              child: Text('Unable to load your notes. Please restart the app.'),
+            ),
+          );
+        }
+
+        final repository = NoteRepositoryImpl(snapshot.data!);
+
+        return ChangeNotifierProvider<NotesProvider>(
+          create: (_) => NotesProvider(repositories: repository)..loadNotes(),
+          child: const _AuthenticatedNotesHost(),
+        );
+      },
+    );
+  }
+}
+
+class _AuthenticatedNotesHost extends StatelessWidget {
+  const _AuthenticatedNotesHost();
+
+  @override
+  Widget build(BuildContext context) {
+    return const NotesScreen();
+  }
+}
+````
+
+## File: lib/core/features/auth/presentation/auth_text_field.dart
+````dart
+import 'package:flutter/material.dart';
+import 'package:notes_app/core/theme/app_radius.dart';
+
+class AuthTextField extends StatelessWidget {
+  const AuthTextField({
+    super.key,
+    required this.controller,
+    required this.label,
+    required this.prefixIcon,
+    this.validator,
+    this.obscureText = false,
+    this.keyboardType,
+    this.suffixIcon,
+    this.onSuffixPressed,
+    this.textInputAction,
+  });
+
+  final TextEditingController controller;
+  final String label;
+  final IconData prefixIcon;
+  final String? Function(String?)? validator;
+  final bool obscureText;
+  final TextInputType? keyboardType;
+  final IconData? suffixIcon;
+  final VoidCallback? onSuffixPressed;
+  final TextInputAction? textInputAction;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+
+    return TextFormField(
+      controller: controller,
+      obscureText: obscureText,
+      keyboardType: keyboardType,
+      textInputAction: textInputAction,
+      validator: validator,
+      style: theme.textTheme.bodyMedium?.copyWith(color: colors.onSurface),
+      decoration: InputDecoration(
+        hintText: label,
+        hintStyle: theme.textTheme.bodyMedium,
+        prefixIcon: Icon(prefixIcon),
+        suffixIcon: suffixIcon == null
+            ? null
+            : IconButton(onPressed: onSuffixPressed, icon: Icon(suffixIcon)),
+        filled: true,
+        fillColor: colors.surface,
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 18,
+        ),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(NotedRadius.sm),
+          borderSide: BorderSide(color: colors.outline),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(NotedRadius.sm),
+          borderSide: BorderSide(color: colors.outline),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(NotedRadius.sm),
+          borderSide: BorderSide(color: colors.primary, width: 1.5),
+        ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(NotedRadius.sm),
+          borderSide: BorderSide(color: colors.error),
+        ),
+        focusedErrorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(NotedRadius.sm),
+          borderSide: BorderSide(color: colors.error, width: 1.5),
+        ),
+      ),
+    );
+  }
+}
+````
+
 ## File: lib/core/features/notes/data/models/checklist_item_model.dart
-```dart
+````dart
 import 'package:notes_app/core/features/notes/domain/entities/checklist_item.dart';
 
 class ChecklistItemModel extends ChecklistItem {
@@ -141,10 +443,10 @@ class ChecklistItemModel extends ChecklistItem {
     return {'id': id, 'text': text, 'isCompleted': isCompleted};
   }
 }
-```
+````
 
 ## File: lib/core/features/notes/domain/entities/checklist_item.dart
-```dart
+````dart
 class ChecklistItem {
   final String id;
   final String text;
@@ -164,10 +466,10 @@ class ChecklistItem {
     );
   }
 }
-```
+````
 
 ## File: lib/core/features/notes/domain/repositories/note_repositories.dart
-```dart
+````dart
 import '../entities/note.dart';
 
 abstract class NoteRepositories {
@@ -178,43 +480,363 @@ abstract class NoteRepositories {
 
   Future<void> updateNote(Note note);
 }
-```
+````
 
-## File: lib/core/features/notes/presentation/screens/login_screen.dart
-```dart
+## File: lib/core/features/notes/presentation/screens/sign_up_screen.dart
+````dart
 import 'package:flutter/material.dart';
+import 'package:notes_app/core/features/auth/presentation/auth_text_field.dart';
+import 'package:notes_app/core/features/notes/presentation/screens/login_screen.dart';
+import 'package:notes_app/core/theme/app_radius.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:notes_app/core/features/auth/data/services/auth_service.dart';
 import 'package:notes_app/core/features/notes/presentation/screens/notes_screen.dart';
 
-class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+class SignUpScreen extends StatefulWidget {
+  const SignUpScreen({super.key});
 
   @override
-  State<StatefulWidget> createState() => _LoginScreenState();
+  State<SignUpScreen> createState() => _SignUpScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
+class _SignUpScreenState extends State<SignUpScreen> {
+  final _formKey = GlobalKey<FormState>();
+
+  final _nameController = TextEditingController();
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
+
+  final AuthService _authService = AuthService();
+
+  bool _obscurePassword = true;
+  bool _obscureConfirmPassword = true;
+  bool _acceptedTerms = false;
+  bool _isloading = false;
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _emailController.dispose();
+    _passwordController.dispose();
+    _confirmPasswordController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _createAccount() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    if (!_acceptedTerms) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please accept the terms to continue.')),
+      );
+      return;
+    }
+
+    setState(() => _isloading = true);
+
+    try {
+      await _authService.signUpWithEmail(
+        name: _nameController.text,
+        email: _emailController.text,
+        password: _passwordController.text,
+      );
+
+      if (!mounted) return;
+
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (_) => const NotesScreen()),
+        (route) => false,
+      );
+    } on FirebaseAuthException catch (exception) {
+      debugPrint('Firebase Auth error code: ${exception.code}');
+      debugPrint('Firebase Auth error message: ${exception.message}');
+      if (!mounted) return;
+
+      final message = _authService.getAuthErrorMessage(exception);
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
+    } catch (_) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Something went wrong. Please try again.'),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isloading = false);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+
     return Scaffold(
-      appBar: AppBar(title: Text('Login Screen')),
-      body: Center(
-        child: TextButton(
-          onPressed: () async {
-            await Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => NotesScreen()),
-            );
-          },
-          child: Text('Login'),
+      appBar: AppBar(
+        title: Text(
+          'CREATE ACCOUNT',
+          style: theme.textTheme.titleMedium?.copyWith(letterSpacing: 1.5),
+        ),
+      ),
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 20),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 420),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      'Join Noted.',
+                      style: theme.textTheme.titleLarge?.copyWith(fontSize: 30),
+                    ),
+
+                    const SizedBox(height: 8),
+
+                    Text(
+                      'Create an account to keep your thoughts organised.',
+                      style: theme.textTheme.bodyMedium,
+                    ),
+
+                    const SizedBox(height: 32),
+
+                    // Full name
+                    AuthTextField(
+                      controller: _nameController,
+                      label: 'Full name',
+                      prefixIcon: Icons.person_outline,
+                      textInputAction: TextInputAction.next,
+                      validator: (value) {
+                        if (value == null || value.trim().isEmpty) {
+                          return 'Please enter your name';
+                        }
+
+                        return null;
+                      },
+                    ),
+
+                    const SizedBox(height: 18),
+
+                    // Email
+                    AuthTextField(
+                      controller: _emailController,
+                      label: 'Email address',
+                      prefixIcon: Icons.mail_outline,
+                      keyboardType: TextInputType.emailAddress,
+                      textInputAction: TextInputAction.next,
+                      validator: (value) {
+                        final email = value?.trim() ?? '';
+
+                        if (email.isEmpty) {
+                          return 'Please enter your email';
+                        }
+
+                        if (!RegExp(
+                          r'^[^@\s]+@[^@\s]+\.[^@\s]+$',
+                        ).hasMatch(email)) {
+                          return 'Enter a valid email address';
+                        }
+
+                        return null;
+                      },
+                    ),
+
+                    const SizedBox(height: 18),
+
+                    // Password
+                    AuthTextField(
+                      controller: _passwordController,
+                      label: 'Password',
+                      prefixIcon: Icons.lock_outline,
+                      obscureText: _obscurePassword,
+                      textInputAction: TextInputAction.next,
+                      suffixIcon: _obscurePassword
+                          ? Icons.visibility_outlined
+                          : Icons.visibility_off_outlined,
+                      onSuffixPressed: () {
+                        setState(() {
+                          _obscurePassword = !_obscurePassword;
+                        });
+                      },
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Please enter a password';
+                        }
+
+                        if (value.length < 8) {
+                          return 'Use at least 8 characters';
+                        }
+
+                        if (!RegExp(r'[A-Z]').hasMatch(value)) {
+                          return 'Include at least one uppercase letter';
+                        }
+
+                        if (!RegExp(r'[a-z]').hasMatch(value)) {
+                          return 'Include at least one lowercase letter';
+                        }
+
+                        if (!RegExp(r'[0-9]').hasMatch(value)) {
+                          return 'Include at least one number';
+                        }
+
+                        return null;
+                      },
+                    ),
+
+                    const SizedBox(height: 18),
+
+                    // Confirm password
+                    AuthTextField(
+                      controller: _confirmPasswordController,
+                      label: 'Confirm password',
+                      prefixIcon: Icons.lock_reset_outlined,
+                      obscureText: _obscureConfirmPassword,
+                      textInputAction: TextInputAction.done,
+                      suffixIcon: _obscureConfirmPassword
+                          ? Icons.visibility_outlined
+                          : Icons.visibility_off_outlined,
+                      onSuffixPressed: () {
+                        setState(() {
+                          _obscureConfirmPassword = !_obscureConfirmPassword;
+                        });
+                      },
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Please enter a password';
+                        }
+
+                        if (value.length < 8) {
+                          return 'Use at least 8 characters';
+                        }
+
+                        if (!RegExp(r'[A-Z]').hasMatch(value)) {
+                          return 'Include at least one uppercase letter';
+                        }
+
+                        if (!RegExp(r'[a-z]').hasMatch(value)) {
+                          return 'Include at least one lowercase letter';
+                        }
+
+                        if (!RegExp(r'[0-9]').hasMatch(value)) {
+                          return 'Include at least one number';
+                        }
+
+                        return null;
+                      },
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    // Terms acceptance
+                    CheckboxListTile(
+                      value: _acceptedTerms,
+                      onChanged: (value) {
+                        setState(() {
+                          _acceptedTerms = value ?? false;
+                        });
+                      },
+                      contentPadding: EdgeInsets.zero,
+                      controlAffinity: ListTileControlAffinity.leading,
+                      activeColor: colors.primary,
+                      title: Text(
+                        'I agree to the Terms of Service and Privacy Policy.',
+                        style: theme.textTheme.bodySmall,
+                      ),
+                    ),
+
+                    const SizedBox(height: 20),
+
+                    // Create account
+                    SizedBox(
+                      height: 54,
+                      child: FilledButton(
+                        onPressed: _isloading ? null : _createAccount,
+                        style: FilledButton.styleFrom(
+                          backgroundColor: colors.primary,
+                          foregroundColor: colors.onPrimary,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(NotedRadius.sm),
+                          ),
+                        ),
+                        child: _isloading
+                            ? const SizedBox(
+                                width: 22,
+                                height: 22,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Text(
+                                    'Create Account',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  SizedBox(width: 12),
+                                  Icon(Icons.arrow_forward_rounded),
+                                ],
+                              ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 24),
+
+                    // Existing account
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          'Already have an account?',
+                          style: theme.textTheme.bodyMedium,
+                        ),
+                        TextButton(
+                          onPressed: () {
+                            Navigator.pushReplacement(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const LoginScreen(),
+                              ),
+                            );
+                          },
+                          child: Text(
+                            'Sign in',
+                            style: TextStyle(
+                              color: colors.primary,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
         ),
       ),
     );
   }
 }
-```
+````
 
 ## File: lib/core/features/notes/presentation/widgets/category_clip.dart
-```dart
+````dart
 import 'package:flutter/material.dart';
 import 'package:notes_app/core/features/notes/domain/entities/note.dart';
 
@@ -252,10 +874,10 @@ class CategoryClip extends StatelessWidget {
     );
   }
 }
-```
+````
 
 ## File: lib/core/features/notes/presentation/widgets/format_toobar.dart
-```dart
+````dart
 import 'package:flutter/material.dart';
 import 'package:flutter_quill/flutter_quill.dart';
 
@@ -506,10 +1128,1123 @@ class _FormatToolBarState extends State<FormatToolBar> {
     );
   }
 }
-```
+````
+
+## File: lib/core/features/notes/presentation/widgets/note_color_option.dart
+````dart
+import 'package:flutter/material.dart';
+import 'package:notes_app/core/theme/app_spacing.dart';
+
+class NoteColorOption extends StatelessWidget {
+  const NoteColorOption({
+    super.key,
+    required this.color,
+    required this.isSelected,
+    required this.label,
+    required this.onTap,
+  });
+
+  final String label;
+
+  final VoidCallback onTap;
+
+  final bool isSelected;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        GestureDetector(
+          onTap: onTap,
+          child: Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: color,
+              border: Border.all(
+                color: isSelected
+                    ? Theme.of(context).colorScheme.primary
+                    : Theme.of(context).colorScheme.outline,
+                width: isSelected ? 3 : 1,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: NotedSpacing.xs),
+        Text(label),
+      ],
+    );
+  }
+}
+````
+
+## File: lib/core/features/notes/presentation/widgets/note_editor_header.dart
+````dart
+import 'package:flutter/material.dart';
+
+class NoteEditorHeader extends StatelessWidget {
+  const NoteEditorHeader({
+    super.key,
+    required this.title,
+    required this.onBack,
+    required this.onSave,
+  });
+  final String title;
+  final VoidCallback onBack;
+  final VoidCallback onSave;
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        Text(title, style: Theme.of(context).textTheme.bodyMedium),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: IconButton(
+            onPressed: onBack,
+            icon: const Icon(Icons.arrow_back),
+          ),
+        ),
+        Align(
+          alignment: Alignment.centerRight,
+          child: IconButton(
+            onPressed: onSave,
+            icon: const Icon(Icons.check_circle),
+          ),
+        ),
+      ],
+    );
+  }
+}
+````
+
+## File: lib/core/features/notes/presentation/widgets/noted_color_dot.dart
+````dart
+import 'package:flutter/material.dart';
+
+final class NotedColorDot extends StatelessWidget {
+  const NotedColorDot({super.key, required this.color});
+
+  final Color color;
+
+  static const double _size = 10;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: _size,
+      width: _size,
+      child: DecoratedBox(
+        decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+      ),
+    );
+  }
+}
+````
+
+## File: lib/core/features/notes/presentation/widgets/reminder_field.dart
+````dart
+import 'package:flutter/material.dart';
+import 'package:notes_app/core/theme/app_radius.dart';
+import 'package:notes_app/core/theme/app_spacing.dart';
+
+class ReminderField extends StatelessWidget {
+  const ReminderField({
+    super.key,
+    required this.label,
+    required this.value,
+    required this.onTap,
+  });
+
+  final String label;
+  final String value;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(NotedRadius.sm),
+        child: Container(
+          padding: const EdgeInsets.all(NotedSpacing.md),
+          decoration: BoxDecoration(
+            border: Border.all(color: Theme.of(context).colorScheme.primary),
+            borderRadius: BorderRadius.circular(NotedRadius.sm),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label, style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: NotedSpacing.xs),
+              Text(value, style: Theme.of(context).textTheme.bodyMedium),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+````
+
+## File: lib/core/features/notes/presentation/widgets/reminder_picker_controller.dart
+````dart
+import 'package:flutter/material.dart';
+import 'package:notes_app/core/features/notes/domain/entities/note.dart';
+
+class ReminderPickerController {
+  ReminderPickerController({
+    DateTime? reminder,
+    required ReminderRecurrence recurrence,
+  }) {
+    _selectedRecurrence = recurrence;
+
+    if (reminder != null) {
+      _selectedDate = DateTime(reminder.year, reminder.month, reminder.day);
+
+      _selectedTime = TimeOfDay.fromDateTime(reminder);
+    }
+  }
+
+  DateTime? _selectedDate;
+  TimeOfDay? _selectedTime;
+  late ReminderRecurrence _selectedRecurrence;
+
+  DateTime? get selectedDate => _selectedDate;
+
+  TimeOfDay? get selectedTime => _selectedTime;
+
+  ReminderRecurrence get selectedRecurrence => _selectedRecurrence;
+
+  void setDate(DateTime date) {
+    _selectedDate = DateTime(date.year, date.month, date.day);
+  }
+
+  void setTime(TimeOfDay time) {
+    _selectedTime = time;
+  }
+
+  void setRecurrence(ReminderRecurrence recurrence) {
+    _selectedRecurrence = recurrence;
+  }
+
+  bool get canSetReminder => _selectedDate != null && _selectedTime != null;
+
+  DateTime? buildReminder() {
+    if (!canSetReminder) return null;
+
+    return DateTime(
+      _selectedDate!.year,
+      _selectedDate!.month,
+      _selectedDate!.day,
+      _selectedTime!.hour,
+      _selectedTime!.minute,
+    );
+  }
+}
+````
+
+## File: lib/core/features/notes/presentation/widgets/reminder_recurrence_option.dart
+````dart
+import 'package:flutter/material.dart';
+
+class ReminderRecurrenceOption extends StatelessWidget {
+  const ReminderRecurrenceOption({
+    super.key,
+    required this.label,
+    required this.selected,
+    required this.onSelected,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return ChoiceChip(
+      selectedColor: Theme.of(context).colorScheme.primary,
+      label: Text(label, style: Theme.of(context).textTheme.titleMedium),
+      selected: selected,
+      onSelected: (_) {
+        onSelected();
+      },
+    );
+  }
+}
+````
+
+## File: lib/core/services/rich_text_converter.dart
+````dart
+import 'dart:convert';
+
+import 'package:flutter_quill/flutter_quill.dart';
+
+class RichTextConverter {
+  static Document plainTextToDocument(String text) {
+    final normaalizedText = text.endsWith('\n') ? text : '$text\n';
+    return Document.fromJson([
+      {'insert': normaalizedText},
+    ]);
+  }
+
+  static Document jsonToDocument(String content) {
+    if (content.trim().isEmpty) {
+      return Document();
+    }
+    final json = jsonDecode(content);
+
+    return Document.fromJson(json);
+  }
+
+  static String documentToJsonString(Document document) {
+    final json = document.toDelta().toJson();
+
+    return jsonEncode(json);
+  }
+
+  static String jsonToPlainText(String plainText) {
+    final document = jsonToDocument(plainText);
+
+    return document.toPlainText().trim();
+  }
+
+  static String documentToPlainText(Document document) {
+    return document.toPlainText().trim();
+  }
+}
+````
+
+## File: lib/core/theme/app_spacing.dart
+````dart
+final class NotedSpacing {
+  NotedSpacing._();
+
+  static const double xs = 8;
+  static const double sm = 12;
+  static const double md = 16;
+  static const double lg = 24;
+  static const double xl = 32;
+}
+````
+
+## File: lib/core/utils/date_formatter.dart
+````dart
+import 'package:intl/intl.dart';
+
+class DateFormatter {
+  static String format(DateTime date) {
+    final now = DateTime.now();
+
+    if (date.day == now.day &&
+        date.month == now.month &&
+        date.year == now.year) {
+      return 'Today, ${DateFormat('hh:mm a').format(date)}';
+    }
+
+    final yesterday = now.subtract(const Duration(days: 1));
+
+    if (date.day == yesterday.day &&
+        date.month == yesterday.month &&
+        date.year == yesterday.year) {
+      return 'Yesterday, ${DateFormat('hh:mm a').format(date)}';
+    }
+
+    if (date.year == now.year) {
+      return DateFormat('dd MMM, hh:mm a').format(date);
+    }
+
+    return DateFormat('dd MMM yyyy, hh:mm a').format(date);
+  }
+}
+````
+
+## File: lib/core/utils/id_generator.dart
+````dart
+import 'package:uuid/uuid.dart';
+
+class IdGenerator {
+  static const _uuid = Uuid();
+
+  static String generator() {
+    return _uuid.v4();
+  }
+}
+````
+
+## File: lib/core/utils/reminder_formatter.dart
+````dart
+import 'package:intl/intl.dart';
+import 'package:notes_app/core/utils/date_formatter.dart';
+
+class ReminderFormatter {
+  static String format(DateTime reminder) {
+    final now = DateTime.now();
+
+    final tomorrow = now.add(const Duration(days: 1));
+
+    final time = DateFormat('hh:mm a').format(reminder);
+
+    if (reminder.day == tomorrow.day &&
+        reminder.month == tomorrow.month &&
+        reminder.year == tomorrow.year) {
+      return 'Tomorrow • $time';
+    }
+
+    final date = DateFormatter.format(reminder);
+
+    return '$date • $time';
+  }
+}
+````
+
+## File: lib/core/utils/string_formatter.dart
+````dart
+class StringFormatter {
+  static String capitalize(String text) {
+    if (text.isEmpty) return text;
+    return text[0].toUpperCase() + text.substring(1);
+  }
+}
+````
+
+## File: lib/firebase_options.dart
+````dart
+// File generated by FlutterFire CLI.
+// ignore_for_file: type=lint
+import 'package:firebase_core/firebase_core.dart' show FirebaseOptions;
+import 'package:flutter/foundation.dart'
+    show defaultTargetPlatform, kIsWeb, TargetPlatform;
+
+/// Default [FirebaseOptions] for use with your Firebase apps.
+///
+/// Example:
+/// ```dart
+/// import 'firebase_options.dart';
+/// // ...
+/// await Firebase.initializeApp(
+///   options: DefaultFirebaseOptions.currentPlatform,
+/// );
+/// ```
+class DefaultFirebaseOptions {
+  static FirebaseOptions get currentPlatform {
+    if (kIsWeb) {
+      return web;
+    }
+    switch (defaultTargetPlatform) {
+      case TargetPlatform.android:
+        return android;
+      case TargetPlatform.iOS:
+        return ios;
+      case TargetPlatform.macOS:
+        return macos;
+      case TargetPlatform.windows:
+        return windows;
+      case TargetPlatform.linux:
+        throw UnsupportedError(
+          'DefaultFirebaseOptions have not been configured for linux - '
+          'you can reconfigure this by running the FlutterFire CLI again.',
+        );
+      default:
+        throw UnsupportedError(
+          'DefaultFirebaseOptions are not supported for this platform.',
+        );
+    }
+  }
+
+  static const FirebaseOptions web = FirebaseOptions(
+    apiKey: 'AIzaSyBAUuJWVpo-HvIC-TVW_yOZpsvcxT7VIac',
+    appId: '1:922648575110:web:9d1554399eb96ec9526507',
+    messagingSenderId: '922648575110',
+    projectId: 'noted-b8820',
+    authDomain: 'noted-b8820.firebaseapp.com',
+    storageBucket: 'noted-b8820.firebasestorage.app',
+    measurementId: 'G-WVPFFEQ65D',
+  );
+
+  static const FirebaseOptions android = FirebaseOptions(
+    apiKey: 'AIzaSyCte70FXhRu1kmvpvTZHa-927RBnzKC9tY',
+    appId: '1:922648575110:android:5735f0251c051096526507',
+    messagingSenderId: '922648575110',
+    projectId: 'noted-b8820',
+    storageBucket: 'noted-b8820.firebasestorage.app',
+  );
+
+  static const FirebaseOptions ios = FirebaseOptions(
+    apiKey: 'AIzaSyCCVNYVjro5dMvM8JGCMZJTR6nQvte7diA',
+    appId: '1:922648575110:ios:d19c67acb99f92a5526507',
+    messagingSenderId: '922648575110',
+    projectId: 'noted-b8820',
+    storageBucket: 'noted-b8820.firebasestorage.app',
+    iosBundleId: 'com.example.notesApp',
+  );
+
+  static const FirebaseOptions macos = FirebaseOptions(
+    apiKey: 'AIzaSyCCVNYVjro5dMvM8JGCMZJTR6nQvte7diA',
+    appId: '1:922648575110:ios:d19c67acb99f92a5526507',
+    messagingSenderId: '922648575110',
+    projectId: 'noted-b8820',
+    storageBucket: 'noted-b8820.firebasestorage.app',
+    iosBundleId: 'com.example.notesApp',
+  );
+
+  static const FirebaseOptions windows = FirebaseOptions(
+    apiKey: 'AIzaSyBAUuJWVpo-HvIC-TVW_yOZpsvcxT7VIac',
+    appId: '1:922648575110:web:d5964b32418a293d526507',
+    messagingSenderId: '922648575110',
+    projectId: 'noted-b8820',
+    authDomain: 'noted-b8820.firebaseapp.com',
+    storageBucket: 'noted-b8820.firebasestorage.app',
+    measurementId: 'G-ZPZ709PCJZ',
+  );
+}
+````
+
+## File: lib/core/features/notes/presentation/screens/login_screen.dart
+````dart
+import 'package:flutter/material.dart';
+import 'package:notes_app/core/features/notes/presentation/screens/sign_up_screen.dart';
+import 'package:notes_app/core/features/auth/presentation/auth_text_field.dart';
+import 'package:notes_app/core/features/notes/presentation/screens/notes_screen.dart';
+import 'package:notes_app/core/theme/app_radius.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:notes_app/core/features/auth/data/services/auth_service.dart';
+
+class LoginScreen extends StatefulWidget {
+  const LoginScreen({super.key});
+
+  @override
+  State<LoginScreen> createState() => _LoginScreenState();
+}
+
+class _LoginScreenState extends State<LoginScreen> {
+  final AuthService _authService = AuthService();
+  final _emailController = TextEditingController();
+  final _formKey = GlobalKey<FormState>();
+  bool _isLoading = false;
+  bool _obscurePassword = true;
+  final _passwordController = TextEditingController();
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _login() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() => _isLoading = true);
+
+    try {
+      await _authService.signInWithEmail(
+        email: _emailController.text,
+        password: _passwordController.text,
+      );
+
+      if (!mounted) return;
+
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const NotesScreen()),
+      );
+    } on FirebaseAuthException catch (exception) {
+      debugPrint('Login error code: ${exception.code}');
+      debugPrint('Login error message: ${exception.message}');
+
+      if (!mounted) return;
+
+      final message = _authService.getAuthErrorMessage(exception);
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
+    } catch (exception) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Something went wrong. Please try again.'),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  Future<void> _signInWithGoogle() async {
+    try {
+      setState(() {
+        _isLoading = true;
+      });
+
+      await AuthService().signInWithGoogle();
+
+      // AuthGate will automatically open NotesScreen.
+    } on FirebaseAuthException catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(AuthService().getAuthErrorMessage(e))),
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Google sign-in failed. Please try again.'),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+
+    return Scaffold(
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 420),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // Brand
+                    Text(
+                      'NOTED',
+                      textAlign: TextAlign.center,
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        letterSpacing: 3,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+
+                    const SizedBox(height: 48),
+
+                    // Brand icon
+                    Center(
+                      child: Container(
+                        width: 76,
+                        height: 76,
+                        decoration: BoxDecoration(
+                          border: Border.all(color: colors.onSurface, width: 2),
+                          borderRadius: BorderRadius.circular(NotedRadius.sm),
+                        ),
+                        child: Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            Icon(
+                              Icons.notes_rounded,
+                              size: 42,
+                              color: colors.onSurface,
+                            ),
+                            Positioned(
+                              top: 0,
+                              right: 0,
+                              child: Container(
+                                width: 13,
+                                height: 13,
+                                decoration: BoxDecoration(
+                                  color: colors.primary,
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 28),
+
+                    Text(
+                      'Welcome back',
+                      textAlign: TextAlign.center,
+                      style: theme.textTheme.titleLarge?.copyWith(fontSize: 28),
+                    ),
+
+                    const SizedBox(height: 8),
+
+                    Text(
+                      'Sign in to your account.',
+                      textAlign: TextAlign.center,
+                      style: theme.textTheme.bodyMedium,
+                    ),
+
+                    const SizedBox(height: 36),
+
+                    // Email
+                    AuthTextField(
+                      controller: _emailController,
+                      label: 'Email',
+                      prefixIcon: Icons.mail_outline,
+                      keyboardType: TextInputType.emailAddress,
+                      textInputAction: TextInputAction.next,
+                      validator: (value) {
+                        final email = value?.trim() ?? '';
+
+                        if (email.isEmpty) {
+                          return 'Please enter your email';
+                        }
+
+                        if (!RegExp(
+                          r'^[^@\s]+@[^@\s]+\.[^@\s]+$',
+                        ).hasMatch(email)) {
+                          return 'Enter a valid email address';
+                        }
+
+                        return null;
+                      },
+                    ),
+
+                    const SizedBox(height: 18),
+
+                    // Password
+                    AuthTextField(
+                      controller: _passwordController,
+                      label: 'Password',
+                      prefixIcon: Icons.lock_outline,
+                      obscureText: _obscurePassword,
+                      textInputAction: TextInputAction.done,
+                      suffixIcon: _obscurePassword
+                          ? Icons.visibility_outlined
+                          : Icons.visibility_off_outlined,
+                      onSuffixPressed: () {
+                        setState(() {
+                          _obscurePassword = !_obscurePassword;
+                        });
+                      },
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Please enter your password';
+                        }
+
+                        return null;
+                      },
+                    ),
+
+                    const SizedBox(height: 8),
+
+                    // Forgot password
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton(
+                        onPressed: () async {
+                          final email = _emailController.text.trim();
+
+                          if (email.isEmpty) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                  'Enter your email address first.',
+                                ),
+                              ),
+                            );
+                            return;
+                          }
+
+                          try {
+                            await _authService.sendPasswordResetEmail(
+                              email: email,
+                            );
+
+                            if (!context.mounted) return;
+
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                  'If an account exists for this email, '
+                                  'you will receive a password reset email.',
+                                ),
+                              ),
+                            );
+                          } on FirebaseAuthException catch (exception) {
+                            if (!context.mounted) return;
+
+                            final message = _authService.getAuthErrorMessage(
+                              exception,
+                            );
+
+                            ScaffoldMessenger.of(
+                              context,
+                            ).showSnackBar(SnackBar(content: Text(message)));
+                          } catch (_) {
+                            if (!context.mounted) return;
+
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                  'Something went wrong. Please try again.',
+                                ),
+                              ),
+                            );
+                          }
+                        },
+                        child: Text(
+                          'Forgot password?',
+                          style: TextStyle(color: colors.primary),
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    // Sign in button
+                    SizedBox(
+                      height: 54,
+                      child: FilledButton(
+                        onPressed: _isLoading ? null : _login,
+                        style: FilledButton.styleFrom(
+                          backgroundColor: colors.primary,
+                          foregroundColor: colors.onPrimary,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(NotedRadius.sm),
+                          ),
+                        ),
+                        child: _isLoading
+                            ? const SizedBox(
+                                width: 22,
+                                height: 22,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  const Text(
+                                    'Sign In',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  const Icon(Icons.arrow_forward_rounded),
+                                ],
+                              ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    OutlinedButton(
+                      onPressed: _isLoading ? null : _signInWithGoogle,
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size(double.infinity, 50),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        side: BorderSide(color: Theme.of(context).dividerColor),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Image.asset(
+                            'assets/images/google_logo.png',
+                            height: 22,
+                            width: 22,
+                            errorBuilder: (context, error, stackTrace) {
+                              return const Icon(Icons.g_mobiledata, size: 28);
+                            },
+                          ),
+                          const SizedBox(width: 12),
+                          const Text('Continue with Google'),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 32),
+                    // Divider
+                    Row(
+                      children: [
+                        Expanded(child: Divider(color: colors.outline)),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 14),
+                          child: Text(
+                            'YOUR NOTES, YOUR SPACE',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              letterSpacing: 1,
+                            ),
+                          ),
+                        ),
+                        Expanded(child: Divider(color: colors.outline)),
+                      ],
+                    ),
+
+                    const SizedBox(height: 28),
+
+                    // Sign up navigation placeholder
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          'New to Noted?',
+                          style: theme.textTheme.bodyMedium,
+                        ),
+                        TextButton(
+                          onPressed: () {
+                            Navigator.pushReplacement(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const SignUpScreen(),
+                              ),
+                            );
+                          },
+                          child: Text(
+                            'Create account',
+                            style: TextStyle(
+                              color: colors.primary,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+````
+
+## File: lib/core/features/notes/presentation/screens/trash_screen.dart
+````dart
+import 'package:flutter/material.dart';
+import 'package:notes_app/core/features/notes/presentation/provider/notes_provider.dart';
+import 'package:notes_app/core/features/notes/presentation/widgets/app_drawer.dart';
+import 'package:notes_app/core/features/notes/presentation/widgets/category_filterbar.dart';
+import 'package:notes_app/core/features/notes/presentation/widgets/note_search_field.dart';
+import 'package:notes_app/core/features/notes/presentation/widgets/notes_view_options.dart';
+import 'package:provider/provider.dart';
+
+class TrashScreen extends StatelessWidget {
+  const TrashScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final provider = context.watch<NotesProvider>();
+
+    final notes = provider.trashedNotes;
+
+    return Scaffold(
+      drawer: AppDrawer(selected: DrawerItem.trash),
+
+      appBar: AppBar(
+        title: const Text('Trash Bin'),
+
+        actions: [
+          IconButton(
+            onPressed: () {
+              final provider = context.read<NotesProvider>();
+
+              provider.updateViewType(
+                provider.viewType == NoteViewType.gridView
+                    ? NoteViewType.listView
+                    : NoteViewType.gridView,
+              );
+            },
+
+            icon: Icon(
+              provider.viewType == NoteViewType.gridView
+                  ? Icons.view_list_outlined
+                  : Icons.grid_view_outlined,
+            ),
+          ),
+        ],
+      ),
+
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: CategoryFilterbar(
+              selectedCategory: provider.selectedCategory,
+              onChanged: provider.updateSelectedCategory,
+            ),
+          ),
+
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: NoteSearchfield(
+              hintText: 'Search in Trash...',
+              onChanged: provider.updateSearchQuery,
+            ),
+          ),
+
+          Expanded(
+            child: notes.isEmpty
+                ? const Center(child: Text('Empty Trash Bin'))
+                : NotesViewOptions(
+                    notes: notes,
+                    onLeftSwipeText: 'Delete',
+                    onLeftSwipe: (note) async {
+                      await provider.deleteForever(note.id);
+                    },
+                    onRghtSwipeText: 'Restore',
+                    onRightSwipe: (note) async {
+                      await provider.restoreNote(note);
+                    },
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+````
+
+## File: lib/core/features/notes/presentation/widgets/color_picker.dart
+````dart
+import 'package:flutter/material.dart';
+import 'package:notes_app/core/constants/note_colors.dart';
+import 'package:notes_app/core/features/notes/presentation/widgets/note_color_option.dart';
+import 'package:notes_app/core/theme/app_spacing.dart';
+
+class ColorPicker extends StatelessWidget {
+  final Color selectedColor;
+  final ValueChanged<Color> onColorSelected;
+  static const List<String> labels = [
+    'Default',
+    'Amber',
+    'Green',
+    'Blue',
+    'Purple',
+    'Red',
+  ];
+  const ColorPicker({
+    super.key,
+    required this.selectedColor,
+    required this.onColorSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text('Note colour', style: Theme.of(context).textTheme.titleMedium),
+
+        const SizedBox(height: NotedSpacing.md),
+        Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: NoteColors.colors.asMap().entries.map((entry) {
+            return NoteColorOption(
+              color: entry.value,
+              isSelected: selectedColor == entry.value,
+              label: labels[entry.key],
+              onTap: () {
+                onColorSelected(entry.value);
+              },
+            );
+          }).toList(),
+        ),
+      ],
+    );
+  }
+}
+````
+
+## File: lib/core/features/notes/presentation/widgets/create_note_bottom_sheet.dart
+````dart
+import 'package:flutter/material.dart';
+import 'package:notes_app/core/features/notes/domain/entities/note.dart';
+import 'package:notes_app/core/features/notes/presentation/widgets/create_note_option.dart';
+
+class CreateNoteBottomSheet extends StatelessWidget {
+  const CreateNoteBottomSheet({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.all(8.0),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('Create New', style: Theme.of(context).textTheme.titleMedium),
+
+            const SizedBox(height: 16),
+            CreateNoteOption(
+              icon: Icons.note_outlined,
+              title: 'Text Note',
+              subtitle: 'Write Notes Freely',
+              onTap: () {
+                Navigator.pop(context, NoteType.text);
+              },
+            ),
+            const SizedBox(height: 16),
+            CreateNoteOption(
+              icon: Icons.checklist,
+              title: 'Checklist',
+              subtitle: 'Track tasks with ckeckbox',
+              onTap: () {
+                Navigator.pop(context, NoteType.checklist);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+````
+
+## File: lib/core/features/notes/presentation/widgets/create_note_option.dart
+````dart
+import 'package:flutter/material.dart';
+
+class CreateNoteOption extends StatelessWidget {
+  const CreateNoteOption({
+    super.key,
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+  final IconData icon;
+  final String title;
+  final String subtitle;
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      leading: Icon(icon),
+      title: Text(title, style: Theme.of(context).textTheme.titleMedium),
+      subtitle: Text(subtitle, style: Theme.of(context).textTheme.bodyMedium),
+      trailing: Icon(Icons.arrow_forward_ios),
+      onTap: onTap,
+    );
+  }
+}
+````
 
 ## File: lib/core/features/notes/presentation/widgets/note_action_options.dart
-```dart
+````dart
 import 'package:flutter/material.dart';
 
 class NoteActionOptions extends StatelessWidget {
@@ -533,10 +2268,10 @@ class NoteActionOptions extends StatelessWidget {
     );
   }
 }
-```
+````
 
 ## File: lib/core/features/notes/presentation/widgets/note_action_sheet.dart
-```dart
+````dart
 import 'package:flutter/material.dart';
 import 'package:notes_app/core/features/notes/domain/entities/note.dart';
 import 'package:notes_app/core/features/notes/presentation/provider/notes_provider.dart';
@@ -603,124 +2338,40 @@ class NoteActionSheet extends StatelessWidget {
     );
   }
 }
-```
+````
 
-## File: lib/core/features/notes/presentation/widgets/note_color_option.dart
-```dart
+## File: lib/core/features/notes/presentation/widgets/note_search_field.dart
+````dart
 import 'package:flutter/material.dart';
-import 'package:notes_app/core/theme/app_spacing.dart';
 
-class NoteColorOption extends StatelessWidget {
-  const NoteColorOption({
+class NoteSearchfield extends StatelessWidget {
+  const NoteSearchfield({
     super.key,
-    required this.color,
-    required this.isSelected,
-    required this.label,
-    required this.onTap,
+    required this.onChanged,
+    this.hintText = 'Search Notes...',
   });
 
-  final String label;
+  final ValueChanged<String> onChanged;
 
-  final VoidCallback onTap;
-
-  final bool isSelected;
-  final Color color;
+  final String hintText;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        GestureDetector(
-          onTap: onTap,
-          child: Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: color,
-              border: Border.all(
-                color: isSelected
-                    ? Theme.of(context).colorScheme.primary
-                    : Theme.of(context).colorScheme.outline,
-                width: isSelected ? 3 : 1,
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(height: NotedSpacing.xs),
-        Text(label),
-      ],
-    );
-  }
-}
-```
-
-## File: lib/core/features/notes/presentation/widgets/note_editor_header.dart
-```dart
-import 'package:flutter/material.dart';
-
-class NoteEditorHeader extends StatelessWidget {
-  const NoteEditorHeader({
-    super.key,
-    required this.title,
-    required this.onBack,
-    required this.onSave,
-  });
-  final String title;
-  final VoidCallback onBack;
-  final VoidCallback onSave;
-  @override
-  Widget build(BuildContext context) {
-    return Stack(
-      alignment: Alignment.center,
-      children: [
-        Text(title, style: Theme.of(context).textTheme.bodyMedium),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: IconButton(
-            onPressed: onBack,
-            icon: const Icon(Icons.arrow_back),
-          ),
-        ),
-        Align(
-          alignment: Alignment.centerRight,
-          child: IconButton(
-            onPressed: onSave,
-            icon: const Icon(Icons.check_circle),
-          ),
-        ),
-      ],
-    );
-  }
-}
-```
-
-## File: lib/core/features/notes/presentation/widgets/noted_color_dot.dart
-```dart
-import 'package:flutter/material.dart';
-
-final class NotedColorDot extends StatelessWidget {
-  const NotedColorDot({super.key, required this.color});
-
-  final Color color;
-
-  static const double _size = 10;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: _size,
-      width: _size,
-      child: DecoratedBox(
-        decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+    return TextField(
+      style: Theme.of(context).textTheme.titleMedium,
+      decoration: InputDecoration(
+        hintText: hintText,
+        prefixIcon: const Icon(Icons.search),
+        border: const OutlineInputBorder(),
       ),
+      onChanged: onChanged,
     );
   }
 }
-```
+````
 
 ## File: lib/core/features/notes/presentation/widgets/notes_view_options.dart
-```dart
+````dart
 import 'package:flutter/material.dart';
 import 'package:notes_app/core/features/notes/domain/entities/note.dart';
 import 'package:notes_app/core/features/notes/presentation/provider/notes_provider.dart';
@@ -756,8 +2407,9 @@ class NotesViewOptions extends StatelessWidget {
 
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 2,
-        crossAxisSpacing: 12,
-        mainAxisSpacing: 12,
+        mainAxisExtent: 220,
+        crossAxisSpacing: 10,
+        mainAxisSpacing: 10,
 
         // Start here and tune visually.
         childAspectRatio: 0.9,
@@ -859,7 +2511,12 @@ class NotesViewOptions extends StatelessWidget {
           await Navigator.push(
             context,
 
-            MaterialPageRoute(builder: (_) => EditNoteScreen(note: note)),
+            MaterialPageRoute(
+              builder: (_) => ChangeNotifierProvider<NotesProvider>.value(
+                value: context.read<NotesProvider>(),
+                child: EditNoteScreen(note: note),
+              ),
+            ),
           );
         },
 
@@ -885,652 +2542,10 @@ class NotesViewOptions extends StatelessWidget {
     };
   }
 }
-```
-
-## File: lib/core/features/notes/presentation/widgets/reminder_field.dart
-```dart
-import 'package:flutter/material.dart';
-import 'package:notes_app/core/theme/app_radius.dart';
-import 'package:notes_app/core/theme/app_spacing.dart';
-
-class ReminderField extends StatelessWidget {
-  const ReminderField({
-    super.key,
-    required this.label,
-    required this.value,
-    required this.onTap,
-  });
-
-  final String label;
-  final String value;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(NotedRadius.sm),
-        child: Container(
-          padding: const EdgeInsets.all(NotedSpacing.md),
-          decoration: BoxDecoration(
-            border: Border.all(color: Theme.of(context).colorScheme.primary),
-            borderRadius: BorderRadius.circular(NotedRadius.sm),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(label, style: Theme.of(context).textTheme.titleMedium),
-              const SizedBox(height: NotedSpacing.xs),
-              Text(value, style: Theme.of(context).textTheme.bodyMedium),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-```
-
-## File: lib/core/features/notes/presentation/widgets/reminder_picker_controller.dart
-```dart
-import 'package:flutter/material.dart';
-import 'package:notes_app/core/features/notes/domain/entities/note.dart';
-
-class ReminderPickerController {
-  ReminderPickerController({
-    DateTime? reminder,
-    required ReminderRecurrence recurrence,
-  }) {
-    _selectedRecurrence = recurrence;
-
-    if (reminder != null) {
-      _selectedDate = DateTime(reminder.year, reminder.month, reminder.day);
-
-      _selectedTime = TimeOfDay.fromDateTime(reminder);
-    }
-  }
-
-  DateTime? _selectedDate;
-  TimeOfDay? _selectedTime;
-  late ReminderRecurrence _selectedRecurrence;
-
-  DateTime? get selectedDate => _selectedDate;
-
-  TimeOfDay? get selectedTime => _selectedTime;
-
-  ReminderRecurrence get selectedRecurrence => _selectedRecurrence;
-
-  void setDate(DateTime date) {
-    _selectedDate = DateTime(date.year, date.month, date.day);
-  }
-
-  void setTime(TimeOfDay time) {
-    _selectedTime = time;
-  }
-
-  void setRecurrence(ReminderRecurrence recurrence) {
-    _selectedRecurrence = recurrence;
-  }
-
-  bool get canSetReminder => _selectedDate != null && _selectedTime != null;
-
-  DateTime? buildReminder() {
-    if (!canSetReminder) return null;
-
-    return DateTime(
-      _selectedDate!.year,
-      _selectedDate!.month,
-      _selectedDate!.day,
-      _selectedTime!.hour,
-      _selectedTime!.minute,
-    );
-  }
-}
-```
-
-## File: lib/core/features/notes/presentation/widgets/reminder_recurrence_option.dart
-```dart
-import 'package:flutter/material.dart';
-
-class ReminderRecurrenceOption extends StatelessWidget {
-  const ReminderRecurrenceOption({
-    super.key,
-    required this.label,
-    required this.selected,
-    required this.onSelected,
-  });
-
-  final String label;
-  final bool selected;
-  final VoidCallback onSelected;
-
-  @override
-  Widget build(BuildContext context) {
-    return ChoiceChip(
-      selectedColor: Theme.of(context).colorScheme.primary,
-      label: Text(label, style: Theme.of(context).textTheme.titleMedium),
-      selected: selected,
-      onSelected: (_) {
-        onSelected();
-      },
-    );
-  }
-}
-```
-
-## File: lib/core/services/rich_text_converter.dart
-```dart
-import 'dart:convert';
-
-import 'package:flutter_quill/flutter_quill.dart';
-
-class RichTextConverter {
-  static Document plainTextToDocument(String text) {
-    final normaalizedText = text.endsWith('\n') ? text : '$text\n';
-    return Document.fromJson([
-      {'insert': normaalizedText},
-    ]);
-  }
-
-  static Document jsonToDocument(String content) {
-    if (content.trim().isEmpty) {
-      return Document();
-    }
-    final json = jsonDecode(content);
-
-    return Document.fromJson(json);
-  }
-
-  static String documentToJsonString(Document document) {
-    final json = document.toDelta().toJson();
-
-    return jsonEncode(json);
-  }
-
-  static String jsonToPlainText(String plainText) {
-    final document = jsonToDocument(plainText);
-
-    return document.toPlainText().trim();
-  }
-
-  static String documentToPlainText(Document document) {
-    return document.toPlainText().trim();
-  }
-}
-```
-
-## File: lib/core/theme/app_spacing.dart
-```dart
-final class NotedSpacing {
-  NotedSpacing._();
-
-  static const double xs = 8;
-  static const double sm = 12;
-  static const double md = 16;
-  static const double lg = 24;
-  static const double xl = 32;
-}
-```
-
-## File: lib/core/utils/date_formatter.dart
-```dart
-import 'package:intl/intl.dart';
-
-class DateFormatter {
-  static String format(DateTime date) {
-    final now = DateTime.now();
-
-    if (date.day == now.day &&
-        date.month == now.month &&
-        date.year == now.year) {
-      return 'Today, ${DateFormat('hh:mm a').format(date)}';
-    }
-
-    final yesterday = now.subtract(const Duration(days: 1));
-
-    if (date.day == yesterday.day &&
-        date.month == yesterday.month &&
-        date.year == yesterday.year) {
-      return 'Yesterday, ${DateFormat('hh:mm a').format(date)}';
-    }
-
-    if (date.year == now.year) {
-      return DateFormat('dd MMM, hh:mm a').format(date);
-    }
-
-    return DateFormat('dd MMM yyyy, hh:mm a').format(date);
-  }
-}
-```
-
-## File: lib/core/utils/id_generator.dart
-```dart
-import 'package:uuid/uuid.dart';
-
-class IdGenerator {
-  static const _uuid = Uuid();
-
-  static String generator() {
-    return _uuid.v4();
-  }
-}
-```
-
-## File: lib/core/utils/reminder_formatter.dart
-```dart
-import 'package:intl/intl.dart';
-import 'package:notes_app/core/utils/date_formatter.dart';
-
-class ReminderFormatter {
-  static String format(DateTime reminder) {
-    final now = DateTime.now();
-
-    final tomorrow = now.add(const Duration(days: 1));
-
-    final time = DateFormat('hh:mm a').format(reminder);
-
-    if (reminder.day == tomorrow.day &&
-        reminder.month == tomorrow.month &&
-        reminder.year == tomorrow.year) {
-      return 'Tomorrow • $time';
-    }
-
-    final date = DateFormatter.format(reminder);
-
-    return '$date • $time';
-  }
-}
-```
-
-## File: lib/core/utils/string_formatter.dart
-```dart
-class StringFormatter {
-  static String capitalize(String text) {
-    if (text.isEmpty) return text;
-    return text[0].toUpperCase() + text.substring(1);
-  }
-}
-```
-
-## File: lib/core/features/notes/data/datasources/local_note_datasources.dart
-```dart
-import 'package:hive/hive.dart';
-
-import '../models/note_model.dart';
-
-class LocalNoteDatasources {
-  late Box notesBox;
-
-  Future<void> init() async {
-    notesBox = await Hive.openBox('notes');
-  }
-
-  Future<void> addNote(NoteModel note) async {
-    await notesBox.put(note.id, note.toMap());
-  }
-
-  Future<List<NoteModel>> getNotes() async {
-    return notesBox.values
-        .map((note) => NoteModel.fromMap(Map<String, dynamic>.from(note)))
-        .toList();
-  }
-
-  Future<void> deleteNote(String id) async {
-    await notesBox.delete(id);
-  }
-
-  Future<void> updateNote(NoteModel updatedNote) async {
-    await notesBox.put(updatedNote.id, updatedNote.toMap());
-  }
-}
-```
-
-## File: lib/core/features/notes/presentation/screens/trash_screen.dart
-```dart
-import 'package:flutter/material.dart';
-import 'package:notes_app/core/features/notes/presentation/provider/notes_provider.dart';
-import 'package:notes_app/core/features/notes/presentation/widgets/app_drawer.dart';
-import 'package:notes_app/core/features/notes/presentation/widgets/category_filterbar.dart';
-import 'package:notes_app/core/features/notes/presentation/widgets/note_search_field.dart';
-import 'package:notes_app/core/features/notes/presentation/widgets/notes_view_options.dart';
-import 'package:provider/provider.dart';
-
-class TrashScreen extends StatelessWidget {
-  const TrashScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    final provider = context.watch<NotesProvider>();
-
-    final notes = provider.trashedNotes;
-
-    return Scaffold(
-      drawer: AppDrawer(selected: DrawerItem.trash),
-
-      appBar: AppBar(
-        title: const Text('Trash Bin'),
-
-        actions: [
-          IconButton(
-            onPressed: () {
-              final provider = context.read<NotesProvider>();
-
-              provider.updateViewType(
-                provider.viewType == NoteViewType.gridView
-                    ? NoteViewType.listView
-                    : NoteViewType.gridView,
-              );
-            },
-
-            icon: Icon(
-              provider.viewType == NoteViewType.gridView
-                  ? Icons.view_list_outlined
-                  : Icons.grid_view_outlined,
-            ),
-          ),
-        ],
-      ),
-
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: CategoryFilterbar(
-              selectedCategory: provider.selectedCategory,
-              onChanged: provider.updateSelectedCategory,
-            ),
-          ),
-
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: NoteSearchfield(
-              hintText: 'Search in Trash...',
-              onChanged: provider.updateSearchQuery,
-            ),
-          ),
-
-          Expanded(
-            child: notes.isEmpty
-                ? const Center(child: Text('Empty Trash Bin'))
-                : NotesViewOptions(
-                    notes: notes,
-                    onLeftSwipeText: 'Delete',
-                    onLeftSwipe: (note) async {
-                      await provider.deleteForever(note.id);
-                    },
-                    onRghtSwipeText: 'Restore',
-                    onRightSwipe: (note) async {
-                      await provider.restoreNote(note);
-                    },
-                  ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-```
-
-## File: lib/core/features/notes/presentation/widgets/category_filterbar.dart
-```dart
-import 'package:flutter/material.dart';
-import 'package:notes_app/core/features/notes/domain/entities/note.dart';
-import 'package:notes_app/core/features/notes/presentation/widgets/category_clip.dart';
-import 'package:notes_app/core/utils/string_formatter.dart';
-
-class CategoryFilterbar extends StatelessWidget {
-  const CategoryFilterbar({
-    super.key,
-    required this.selectedCategory,
-    required this.onChanged,
-  });
-
-  final ValueChanged<NoteCategory?> onChanged;
-  final NoteCategory? selectedCategory;
-
-  @override
-  Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-
-      child: Row(
-        children: [
-          CategoryClip(
-            label: 'All',
-            category: null,
-            onSelectedCategory: onChanged,
-            selectedCategory: selectedCategory,
-          ),
-          ...NoteCategory.values.map(
-            (category) => CategoryClip(
-              label: StringFormatter.capitalize(category.name),
-              category: category,
-              onSelectedCategory: onChanged,
-              selectedCategory: selectedCategory,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-```
-
-## File: lib/core/features/notes/presentation/widgets/checklist_preview.dart
-```dart
-import 'package:flutter/material.dart';
-import 'package:notes_app/core/features/notes/domain/entities/checklist_item.dart';
-
-class ChecklistPreview extends StatelessWidget {
-  const ChecklistPreview({super.key, required this.items});
-
-  final List<ChecklistItem> items;
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        debugPrint(
-          'ChecklistPreview constraints: '
-          'minHeight=${constraints.minHeight}, '
-          'maxHeight=${constraints.maxHeight}',
-        );
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ...items.take(3).map((item) {
-              return Row(
-                children: [
-                  Icon(
-                    item.isCompleted
-                        ? Icons.check_box
-                        : Icons.check_box_outline_blank,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      item.text,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
-              );
-            }),
-            if (items.length > 3)
-              Text(
-                "+${items.length - 3} more",
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-          ],
-        );
-      },
-    );
-  }
-}
-```
-
-## File: lib/core/features/notes/presentation/widgets/color_picker.dart
-```dart
-import 'package:flutter/material.dart';
-import 'package:notes_app/core/constants/note_colors.dart';
-import 'package:notes_app/core/features/notes/presentation/widgets/note_color_option.dart';
-import 'package:notes_app/core/theme/app_spacing.dart';
-
-class ColorPicker extends StatelessWidget {
-  final Color selectedColor;
-  final ValueChanged<Color> onColorSelected;
-  static const List<String> labels = [
-    'Default',
-    'Amber',
-    'Green',
-    'Blue',
-    'Purple',
-    'Red',
-  ];
-  const ColorPicker({
-    super.key,
-    required this.selectedColor,
-    required this.onColorSelected,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text('Note colour', style: Theme.of(context).textTheme.titleMedium),
-
-        const SizedBox(height: NotedSpacing.md),
-        Wrap(
-          spacing: 12,
-          runSpacing: 12,
-          children: NoteColors.colors.asMap().entries.map((entry) {
-            return NoteColorOption(
-              color: entry.value,
-              isSelected: selectedColor == entry.value,
-              label: labels[entry.key],
-              onTap: () {
-                onColorSelected(entry.value);
-              },
-            );
-          }).toList(),
-        ),
-      ],
-    );
-  }
-}
-```
-
-## File: lib/core/features/notes/presentation/widgets/create_note_bottom_sheet.dart
-```dart
-import 'package:flutter/material.dart';
-import 'package:notes_app/core/features/notes/domain/entities/note.dart';
-import 'package:notes_app/core/features/notes/presentation/widgets/create_note_option.dart';
-
-class CreateNoteBottomSheet extends StatelessWidget {
-  const CreateNoteBottomSheet({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.all(8.0),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text('Create New', style: Theme.of(context).textTheme.titleMedium),
-
-            const SizedBox(height: 16),
-            CreateNoteOption(
-              icon: Icons.note_outlined,
-              title: 'Text Note',
-              subtitle: 'Write Notes Freely',
-              onTap: () {
-                Navigator.pop(context, NoteType.text);
-              },
-            ),
-            const SizedBox(height: 16),
-            CreateNoteOption(
-              icon: Icons.checklist,
-              title: 'Checklist',
-              subtitle: 'Track tasks with ckeckbox',
-              onTap: () {
-                Navigator.pop(context, NoteType.checklist);
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-```
-
-## File: lib/core/features/notes/presentation/widgets/create_note_option.dart
-```dart
-import 'package:flutter/material.dart';
-
-class CreateNoteOption extends StatelessWidget {
-  const CreateNoteOption({
-    super.key,
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.onTap,
-  });
-  final IconData icon;
-  final String title;
-  final String subtitle;
-
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return ListTile(
-      leading: Icon(icon),
-      title: Text(title, style: Theme.of(context).textTheme.titleMedium),
-      subtitle: Text(subtitle, style: Theme.of(context).textTheme.bodyMedium),
-      trailing: Icon(Icons.arrow_forward_ios),
-      onTap: onTap,
-    );
-  }
-}
-```
-
-## File: lib/core/features/notes/presentation/widgets/note_search_field.dart
-```dart
-import 'package:flutter/material.dart';
-
-class NoteSearchfield extends StatelessWidget {
-  const NoteSearchfield({
-    super.key,
-    required this.onChanged,
-    this.hintText = 'Search Notes...',
-  });
-
-  final ValueChanged<String> onChanged;
-
-  final String hintText;
-
-  @override
-  Widget build(BuildContext context) {
-    return TextField(
-      style: Theme.of(context).textTheme.titleMedium,
-      decoration: InputDecoration(
-        hintText: hintText,
-        prefixIcon: const Icon(Icons.search),
-        border: const OutlineInputBorder(),
-      ),
-      onChanged: onChanged,
-    );
-  }
-}
-```
+````
 
 ## File: lib/core/features/notes/presentation/widgets/reminder_picker.dart
-```dart
+````dart
 import 'package:flutter/material.dart';
 import 'package:notes_app/core/features/notes/domain/entities/note.dart';
 import 'package:notes_app/core/features/notes/presentation/widgets/reminder_field.dart';
@@ -1741,181 +2756,10 @@ class _ReminderPickerState extends State<ReminderPicker> {
     );
   }
 }
-```
-
-## File: lib/core/services/notification_service.dart
-```dart
-import 'package:flutter/foundation.dart';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:flutter_timezone/flutter_timezone.dart';
-import 'package:timezone/data/latest.dart' as tz;
-import 'package:timezone/timezone.dart' as tz;
-import 'package:notes_app/core/features/notes/domain/entities/note.dart';
-
-class NotificationService {
-  NotificationService._();
-
-  static final NotificationService instance = NotificationService._();
-
-  final FlutterLocalNotificationsPlugin _notifications =
-      FlutterLocalNotificationsPlugin();
-
-  static const AndroidNotificationChannel _channel = AndroidNotificationChannel(
-    'notes_channel',
-    'Notes Reminder',
-    description: 'Reminder notifications for notes',
-    importance: Importance.max,
-  );
-
-  Future<void> initialize() async {
-    // Load timezone database
-    tz.initializeTimeZones();
-
-    // Get device timezone
-    final timezoneInfo = await FlutterTimezone.getLocalTimezone();
-
-    String timezone = timezoneInfo.identifier;
-
-    // Older Android versions/emulators sometimes return Asia/Calcutta
-    if (timezone == 'Asia/Calcutta') {
-      timezone = 'Asia/Kolkata';
-    }
-
-    tz.setLocalLocation(tz.getLocation(timezone));
-
-    debugPrint('Device Timezone : ${timezoneInfo.identifier}');
-    debugPrint('Using Timezone  : $timezone');
-    debugPrint('TZ Local        : ${tz.local.name}');
-
-    const initializationSettings = InitializationSettings(
-      android: AndroidInitializationSettings('@mipmap/ic_launcher'),
-    );
-
-    await _notifications.initialize(settings: initializationSettings);
-
-    final android = _notifications
-        .resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin
-        >();
-
-    if (android != null) {
-      // Android 13+
-      await android.requestNotificationsPermission();
-
-      // Android 14+
-      await android.requestExactAlarmsPermission();
-
-      // Explicitly create notification channel
-      await android.createNotificationChannel(_channel);
-
-      final canScheduleExact = await android.canScheduleExactNotifications();
-
-      debugPrint('Can schedule exact alarms: $canScheduleExact');
-    }
-  }
-
-  Future<void> scheduleNotification({
-    required int id,
-    required String title,
-    required String body,
-    required DateTime scheduledTime,
-    required ReminderRecurrence recurrence,
-  }) async {
-    final scheduledDate = tz.TZDateTime.from(scheduledTime, tz.local);
-
-    debugPrint('--------------------------------');
-    debugPrint('DateTime       : $scheduledTime');
-    debugPrint('TZDateTime     : $scheduledDate');
-    debugPrint('Local Timezone : ${tz.local.name}');
-    debugPrint('--------------------------------');
-
-    const notificationDetails = NotificationDetails(
-      android: AndroidNotificationDetails(
-        'notes_channel',
-        'Notes Reminder',
-        channelDescription: 'Reminder notifications for notes',
-        importance: Importance.max,
-        priority: Priority.high,
-        playSound: true,
-        enableVibration: true,
-
-        onlyAlertOnce: false,
-      ),
-    );
-
-    await _notifications.zonedSchedule(
-      id: id,
-      title: title,
-      body: body,
-      scheduledDate: scheduledDate,
-      notificationDetails: notificationDetails,
-      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-      matchDateTimeComponents: _dateTimeComponents(recurrence),
-      payload: id.toString(),
-    );
-
-    final pending = await _notifications.pendingNotificationRequests();
-
-    debugPrint('Pending Notifications: ${pending.length}');
-
-    for (final notification in pending) {
-      debugPrint(
-        'ID: ${notification.id}, '
-        'Title: ${notification.title}',
-      );
-    }
-  }
-
-  Future<void> cancelNotification(int id) async {
-    await _notifications.cancel(id: id);
-  }
-
-  Future<void> cancelAllNotifications() async {
-    await _notifications.cancelAll();
-  }
-
-  Future<void> showNotification() async {
-    const details = NotificationDetails(
-      android: AndroidNotificationDetails(
-        'notes_channel',
-        'Notes Reminder',
-        channelDescription: 'Reminder notifications for notes',
-        importance: Importance.max,
-        priority: Priority.high,
-      ),
-    );
-
-    await _notifications.show(
-      id: 0,
-      title: 'Test Notification',
-      body: 'If you see this, notifications work.',
-      notificationDetails: details,
-    );
-  }
-
-  DateTimeComponents? _dateTimeComponents(ReminderRecurrence recurrence) {
-    switch (recurrence) {
-      case ReminderRecurrence.none:
-        return null;
-
-      case ReminderRecurrence.daily:
-        return DateTimeComponents.time;
-
-      case ReminderRecurrence.weekly:
-        return DateTimeComponents.dayOfWeekAndTime;
-
-      case ReminderRecurrence.monthly:
-        return DateTimeComponents.dayOfMonthAndTime;
-
-      case ReminderRecurrence.yearly:
-        return DateTimeComponents.dateAndTime;
-    }
-  }
-}
-```
+````
 
 ## File: lib/core/theme/app_radius.dart
-```dart
+````dart
 final class NotedRadius {
   NotedRadius._();
 
@@ -1924,10 +2768,10 @@ final class NotedRadius {
   static const double md = 12;
   static const double lg = 32;
 }
-```
+````
 
 ## File: lib/core/theme/app_theme.dart
-```dart
+````dart
 import 'package:flutter/material.dart';
 import 'package:notes_app/core/theme/app_radius.dart';
 import 'package:notes_app/core/theme/app_typography.dart';
@@ -2022,10 +2866,10 @@ class NotedTheme {
     );
   }
 }
-```
+````
 
 ## File: lib/core/theme/noted_colors.dart
-```dart
+````dart
 import 'package:flutter/material.dart';
 
 final class NotedColors {
@@ -2057,10 +2901,10 @@ final class NotedColors {
 
   static const Color accent = Color(0xFFD71921);
 }
-```
+````
 
 ## File: lib/core/constants/note_colors.dart
-```dart
+````dart
 import 'package:flutter/material.dart';
 
 class NoteColors {
@@ -2073,10 +2917,43 @@ class NoteColors {
     Color.fromARGB(255, 247, 1, 1),
   ];
 }
-```
+````
+
+## File: lib/core/features/notes/data/datasources/local_note_datasources.dart
+````dart
+import 'package:hive/hive.dart';
+
+import '../models/note_model.dart';
+
+class LocalNoteDatasources {
+  late Box notesBox;
+
+  Future<void> init({required String userId}) async {
+    notesBox = await Hive.openBox('notes_$userId');
+  }
+
+  Future<void> addNote(NoteModel note) async {
+    await notesBox.put(note.id, note.toMap());
+  }
+
+  Future<List<NoteModel>> getNotes() async {
+    return notesBox.values
+        .map((note) => NoteModel.fromMap(Map<String, dynamic>.from(note)))
+        .toList();
+  }
+
+  Future<void> deleteNote(String id) async {
+    await notesBox.delete(id);
+  }
+
+  Future<void> updateNote(NoteModel updatedNote) async {
+    await notesBox.put(updatedNote.id, updatedNote.toMap());
+  }
+}
+````
 
 ## File: lib/core/features/notes/presentation/screens/archive_screen.dart
-```dart
+````dart
 import 'package:flutter/material.dart';
 import 'package:notes_app/core/features/notes/presentation/provider/notes_provider.dart';
 import 'package:notes_app/core/features/notes/presentation/widgets/app_drawer.dart';
@@ -2159,120 +3036,55 @@ class ArchiveScreen extends StatelessWidget {
     );
   }
 }
-```
+````
 
-## File: lib/core/features/notes/presentation/widgets/app_drawer.dart
-```dart
+## File: lib/core/features/notes/presentation/widgets/category_filterbar.dart
+````dart
 import 'package:flutter/material.dart';
-import 'package:notes_app/core/features/notes/presentation/provider/notes_provider.dart';
-import 'package:notes_app/core/features/notes/presentation/screens/archive_screen.dart';
-import 'package:notes_app/core/features/notes/presentation/screens/notes_screen.dart';
-import 'package:notes_app/core/features/notes/presentation/screens/trash_screen.dart';
-import 'package:provider/provider.dart';
+import 'package:notes_app/core/features/notes/domain/entities/note.dart';
+import 'package:notes_app/core/features/notes/presentation/widgets/category_clip.dart';
+import 'package:notes_app/core/utils/string_formatter.dart';
 
-enum DrawerItem { notes, archive, trash }
+class CategoryFilterbar extends StatelessWidget {
+  const CategoryFilterbar({
+    super.key,
+    required this.selectedCategory,
+    required this.onChanged,
+  });
 
-class AppDrawer extends StatelessWidget {
-  const AppDrawer({super.key, required this.selected});
-
-  final DrawerItem selected;
+  final ValueChanged<NoteCategory?> onChanged;
+  final NoteCategory? selectedCategory;
 
   @override
   Widget build(BuildContext context) {
-    return Drawer(
-      child: ListView(
-        padding: EdgeInsets.zero,
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+
+      child: Row(
         children: [
-          DrawerHeader(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                Icon(Icons.notes, size: 40),
-                SizedBox(height: 12),
-                Text('NOTED', style: Theme.of(context).textTheme.titleMedium),
-
-                Text(
-                  'Organize your Ideas',
-                  style: Theme.of(context).textTheme.bodyMedium,
-                ),
-              ],
-            ),
+          CategoryClip(
+            label: 'All',
+            category: null,
+            onSelectedCategory: onChanged,
+            selectedCategory: selectedCategory,
           ),
-          ListTile(
-            selected: selected == DrawerItem.notes,
-            leading: const Icon(Icons.notes_outlined),
-            title: Text(
-              'Notes',
-              style: Theme.of(context).textTheme.titleMedium,
+          ...NoteCategory.values.map(
+            (category) => CategoryClip(
+              label: StringFormatter.capitalize(category.name),
+              category: category,
+              onSelectedCategory: onChanged,
+              selectedCategory: selectedCategory,
             ),
-            onTap: () {
-              if (selected != DrawerItem.notes) {
-                context.read<NotesProvider>().updateSearchQuery('');
-                Navigator.pop(context);
-
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(builder: (_) => const NotesScreen()),
-                );
-              } else {
-                Navigator.pop(context);
-              }
-            },
-          ),
-          SizedBox(height: 8),
-          ListTile(
-            selected: selected == DrawerItem.archive,
-            leading: const Icon(Icons.archive_outlined),
-            title: Text(
-              'Archived',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            onTap: () {
-              if (selected != DrawerItem.archive) {
-                context.read<NotesProvider>().updateSearchQuery('');
-                Navigator.pop(context);
-
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(builder: (_) => const ArchiveScreen()),
-                );
-              } else {
-                Navigator.pop(context);
-              }
-            },
-          ),
-          SizedBox(height: 8),
-          ListTile(
-            selected: selected == DrawerItem.trash,
-            leading: const Icon(Icons.delete_outlined),
-            title: Text(
-              'Trash Bin',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            onTap: () {
-              if (selected != DrawerItem.trash) {
-                context.read<NotesProvider>().updateSearchQuery('');
-                Navigator.pop(context);
-
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(builder: (_) => const TrashScreen()),
-                );
-              } else {
-                Navigator.pop(context);
-              }
-            },
           ),
         ],
       ),
     );
   }
 }
-```
+````
 
 ## File: lib/core/features/notes/presentation/widgets/checklist_editor.dart
-```dart
+````dart
 import 'package:flutter/material.dart';
 import 'package:notes_app/core/features/notes/domain/entities/checklist_item.dart';
 import 'package:notes_app/core/features/notes/presentation/widgets/checklist_item_tile.dart';
@@ -2332,10 +3144,10 @@ class ChecklistEditor extends StatelessWidget {
     );
   }
 }
-```
+````
 
 ## File: lib/core/features/notes/presentation/widgets/checklist_item_tile.dart
-```dart
+````dart
 import 'package:flutter/material.dart';
 import 'package:notes_app/core/features/notes/domain/entities/checklist_item.dart';
 
@@ -2451,10 +3263,428 @@ class _ChecklistItemTileState extends State<ChecklistItemTile> {
     );
   }
 }
-```
+````
+
+## File: lib/core/features/notes/presentation/widgets/checklist_preview.dart
+````dart
+import 'package:flutter/material.dart';
+import 'package:notes_app/core/features/notes/domain/entities/checklist_item.dart';
+
+class ChecklistPreview extends StatelessWidget {
+  const ChecklistPreview({super.key, required this.items});
+
+  final List<ChecklistItem> items;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    const previewLimit = 4;
+    final visibleItems = items.take(previewLimit).toList();
+    final remainingItems = items.length - visibleItems.length;
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ...visibleItems.map((item) {
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 4),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  item.isCompleted
+                      ? Icons.check_box
+                      : Icons.check_box_outline_blank,
+                  size: 16,
+                  color: item.isCompleted
+                      ? theme.colorScheme.primary
+                      : theme.colorScheme.onSurfaceVariant,
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    item.text,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      decoration: item.isCompleted
+                          ? TextDecoration.lineThrough
+                          : TextDecoration.none,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }),
+        if (remainingItems > 0)
+          Padding(
+            padding: const EdgeInsets.only(top: 2),
+            child: Text(
+              '+$remainingItems more',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+````
+
+## File: lib/core/features/notes/presentation/widgets/note_editor_toolbar.dart
+````dart
+import 'package:flutter/material.dart';
+import 'package:flutter_quill/flutter_quill.dart';
+import 'package:notes_app/core/features/notes/presentation/widgets/color_picker.dart';
+import 'package:notes_app/core/features/notes/presentation/widgets/format_toobar.dart';
+import 'package:notes_app/core/features/notes/presentation/widgets/reminder_picker.dart';
+import 'package:notes_app/core/theme/app_spacing.dart';
+import 'package:notes_app/core/features/notes/domain/entities/note.dart';
+
+class NoteEditorToolbar extends StatefulWidget {
+  const NoteEditorToolbar({
+    super.key,
+    required this.selectedColor,
+    required this.onSelectedColor,
+    required this.reminder,
+    required this.onSelectedReminder,
+    required this.onFormat,
+    required this.recurrence,
+    required this.onSelectedRecurrence,
+    required this.controller,
+  });
+
+  final QuillController? controller;
+  final ValueChanged<Attribute> onFormat;
+  final ValueChanged<Color> onSelectedColor;
+  final ValueChanged<ReminderRecurrence> onSelectedRecurrence;
+  final ValueChanged<DateTime?> onSelectedReminder;
+  final ReminderRecurrence recurrence;
+  final DateTime? reminder;
+  final Color selectedColor;
+
+  @override
+  State<NoteEditorToolbar> createState() => _NoteEditorToolbarState();
+}
+
+class _NoteEditorToolbarState extends State<NoteEditorToolbar> {
+  bool _showFormatToolbar = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // ==============================
+        // FORMAT TOOLBAR
+        // ==============================
+        AnimatedSize(
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOut,
+          child: _showFormatToolbar && widget.controller != null
+              ? Container(
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    border: Border(
+                      bottom: BorderSide(color: Theme.of(context).dividerColor),
+                    ),
+                  ),
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: NotedSpacing.sm,
+                      vertical: 4,
+                    ),
+                    child: FormatToolBar(
+                      onFormat: widget.onFormat,
+                      controller: widget.controller!,
+                    ),
+                  ),
+                )
+              : const SizedBox.shrink(),
+        ),
+
+        // ==============================
+        // MAIN TOOLBAR
+        // ==============================
+        Row(
+          children: [
+            // COLOR
+            Expanded(
+              child: IconButton(
+                onPressed: () {
+                  showModalBottomSheet(
+                    isScrollControlled: true,
+                    context: context,
+                    builder: (context) {
+                      return SafeArea(
+                        child: Padding(
+                          padding: const EdgeInsets.all(NotedSpacing.md),
+                          child: ColorPicker(
+                            selectedColor: widget.selectedColor,
+                            onColorSelected: (color) {
+                              widget.onSelectedColor(color);
+                              Navigator.pop(context);
+                            },
+                          ),
+                        ),
+                      );
+                    },
+                  );
+                },
+                icon: const Icon(Icons.color_lens_outlined),
+              ),
+            ),
+
+            // REMINDER
+            Expanded(
+              child: IconButton(
+                onPressed: () {
+                  showModalBottomSheet(
+                    context: context,
+                    isScrollControlled: true,
+                    builder: (context) {
+                      return SafeArea(
+                        child: Padding(
+                          padding: const EdgeInsets.all(NotedSpacing.md),
+                          child: ReminderPicker(
+                            reminder: widget.reminder,
+                            recurrence: widget.recurrence,
+                            onReminderChanged: (reminder) {
+                              widget.onSelectedReminder(reminder);
+                              Navigator.pop(context);
+                            },
+                            onRecurrenceChanged: widget.onSelectedRecurrence,
+                          ),
+                        ),
+                      );
+                    },
+                  );
+                },
+                icon: const Icon(Icons.notifications_active_outlined),
+              ),
+            ),
+
+            // FORMAT
+            if (widget.controller != null)
+              Expanded(
+                child: IconButton(
+                  onPressed: () {
+                    setState(() {
+                      _showFormatToolbar = !_showFormatToolbar;
+                    });
+                  },
+                  icon: Icon(
+                    Icons.text_format,
+                    color: _showFormatToolbar
+                        ? Theme.of(context).colorScheme.primary
+                        : null,
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+````
+
+## File: lib/core/services/notification_service.dart
+````dart
+import 'package:flutter/foundation.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:flutter_timezone/flutter_timezone.dart';
+import 'package:timezone/data/latest.dart' as tz;
+import 'package:timezone/timezone.dart' as tz;
+import 'package:notes_app/core/features/notes/domain/entities/note.dart';
+
+class NotificationService {
+  NotificationService._();
+
+  static final NotificationService instance = NotificationService._();
+
+  final FlutterLocalNotificationsPlugin _notifications =
+      FlutterLocalNotificationsPlugin();
+
+  static const AndroidNotificationChannel _channel = AndroidNotificationChannel(
+    'notes_channel',
+    'Notes Reminder',
+    description: 'Reminder notifications for notes',
+    importance: Importance.max,
+  );
+
+  Future<void> initialize() async {
+    // Load timezone database
+    tz.initializeTimeZones();
+
+    // Get device timezone
+    final timezoneInfo = await FlutterTimezone.getLocalTimezone();
+
+    String timezone = timezoneInfo.identifier;
+
+    // Older Android versions/emulators sometimes return Asia/Calcutta
+    if (timezone == 'Asia/Calcutta') {
+      timezone = 'Asia/Kolkata';
+    }
+
+    tz.setLocalLocation(tz.getLocation(timezone));
+
+    const initializationSettings = InitializationSettings(
+      android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+    );
+
+    await _notifications.initialize(settings: initializationSettings);
+
+    final android = _notifications
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >();
+
+    if (android != null) {
+      // Android 13+
+      await android.requestNotificationsPermission();
+
+      // Android 14+
+      await android.requestExactAlarmsPermission();
+
+      // Explicitly create notification channel
+      await android.createNotificationChannel(_channel);
+
+      final canScheduleExact = await android.canScheduleExactNotifications();
+
+      debugPrint('Can schedule exact alarms: $canScheduleExact');
+    }
+  }
+
+  Future<void> scheduleNotification({
+    required int id,
+    required String title,
+    required String body,
+    required DateTime scheduledTime,
+    required ReminderRecurrence recurrence,
+  }) async {
+    final scheduledDate = tz.TZDateTime.from(scheduledTime, tz.local);
+
+    const notificationDetails = NotificationDetails(
+      android: AndroidNotificationDetails(
+        'notes_channel',
+        'Notes Reminder',
+        channelDescription: 'Reminder notifications for notes',
+        importance: Importance.max,
+        priority: Priority.high,
+        playSound: true,
+        enableVibration: true,
+
+        onlyAlertOnce: false,
+      ),
+    );
+
+    await _notifications.zonedSchedule(
+      id: id,
+      title: title,
+      body: body,
+      scheduledDate: scheduledDate,
+      notificationDetails: notificationDetails,
+      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      matchDateTimeComponents: _dateTimeComponents(recurrence),
+      payload: id.toString(),
+    );
+
+    final pending = await _notifications.pendingNotificationRequests();
+
+    for (final notification in pending) {
+      debugPrint(
+        'ID: ${notification.id}, '
+        'Title: ${notification.title}',
+      );
+    }
+  }
+
+  Future<void> cancelNotification(int id) async {
+    await _notifications.cancel(id: id);
+  }
+
+  Future<void> cancelAllNotifications() async {
+    await _notifications.cancelAll();
+  }
+
+  Future<void> showNotification() async {
+    const details = NotificationDetails(
+      android: AndroidNotificationDetails(
+        'notes_channel',
+        'Notes Reminder',
+        channelDescription: 'Reminder notifications for notes',
+        importance: Importance.max,
+        priority: Priority.high,
+      ),
+    );
+
+    await _notifications.show(
+      id: 0,
+      title: 'Test Notification',
+      body: 'If you see this, notifications work.',
+      notificationDetails: details,
+    );
+  }
+
+  DateTimeComponents? _dateTimeComponents(ReminderRecurrence recurrence) {
+    switch (recurrence) {
+      case ReminderRecurrence.none:
+        return null;
+
+      case ReminderRecurrence.daily:
+        return DateTimeComponents.time;
+
+      case ReminderRecurrence.weekly:
+        return DateTimeComponents.dayOfWeekAndTime;
+
+      case ReminderRecurrence.monthly:
+        return DateTimeComponents.dayOfMonthAndTime;
+
+      case ReminderRecurrence.yearly:
+        return DateTimeComponents.dateAndTime;
+    }
+  }
+}
+````
+
+## File: lib/core/theme/app_typography.dart
+````dart
+import 'package:flutter/material.dart';
+
+final class NotedTypography {
+  NotedTypography._();
+
+  static const TextStyle title = TextStyle(
+    fontFamily: 'SpaceMono',
+    fontWeight: FontWeight.bold,
+    fontSize: 16,
+  );
+  static const TextStyle appTitle = TextStyle(
+    fontFamily: 'SpaceMono',
+    fontWeight: FontWeight.bold,
+    fontSize: 24,
+  );
+  static const TextStyle body = TextStyle(
+    fontFamily: 'SpaceMono',
+    fontSize: 16,
+  );
+
+  static const TextStyle caption = TextStyle(
+    fontFamily: 'SpaceMono',
+    fontSize: 12,
+  );
+}
+````
 
 ## File: lib/core/features/notes/presentation/widgets/note_card.dart
-```dart
+````dart
 import 'package:dotted_border/dotted_border.dart';
 import 'package:flutter/material.dart';
 
@@ -2491,12 +3721,6 @@ class NoteCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final hasBeenEdited = note.createdAt != note.lastEdited;
-    debugPrint(
-      'Note: ${note.id} | '
-      'type: ${note.type} | '
-      'format: ${note.contentFormat} | '
-      'content: "${note.content}"',
-    );
 
     final previewContent =
         note.contentFormat == NoteContentFormat.richText &&
@@ -2679,198 +3903,159 @@ class NoteCard extends StatelessWidget {
     );
   }
 }
-```
+````
 
-## File: lib/core/features/notes/presentation/widgets/note_editor_toolbar.dart
-```dart
+## File: lib/core/features/notes/presentation/widgets/app_drawer.dart
+````dart
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_quill/flutter_quill.dart';
-import 'package:notes_app/core/features/notes/presentation/widgets/color_picker.dart';
-import 'package:notes_app/core/features/notes/presentation/widgets/format_toobar.dart';
-import 'package:notes_app/core/features/notes/presentation/widgets/reminder_picker.dart';
-import 'package:notes_app/core/theme/app_spacing.dart';
-import 'package:notes_app/core/features/notes/domain/entities/note.dart';
+import 'package:notes_app/core/features/auth/data/services/auth_service.dart';
+import 'package:notes_app/core/features/notes/presentation/provider/notes_provider.dart';
+import 'package:notes_app/core/features/notes/presentation/screens/archive_screen.dart';
+import 'package:notes_app/core/features/notes/presentation/screens/notes_screen.dart';
+import 'package:notes_app/core/features/notes/presentation/screens/trash_screen.dart';
+import 'package:provider/provider.dart';
 
-class NoteEditorToolbar extends StatefulWidget {
-  const NoteEditorToolbar({
-    super.key,
-    required this.selectedColor,
-    required this.onSelectedColor,
-    required this.reminder,
-    required this.onSelectedReminder,
-    required this.onFormat,
-    required this.recurrence,
-    required this.onSelectedRecurrence,
-    required this.controller,
-  });
+enum DrawerItem { notes, archive, trash }
 
-  final QuillController? controller;
-  final ValueChanged<Attribute> onFormat;
-  final ValueChanged<Color> onSelectedColor;
-  final ValueChanged<ReminderRecurrence> onSelectedRecurrence;
-  final ValueChanged<DateTime?> onSelectedReminder;
-  final ReminderRecurrence recurrence;
-  final DateTime? reminder;
-  final Color selectedColor;
+class AppDrawer extends StatelessWidget {
+  const AppDrawer({super.key, required this.selected});
 
-  @override
-  State<NoteEditorToolbar> createState() => _NoteEditorToolbarState();
-}
+  final DrawerItem selected;
 
-class _NoteEditorToolbarState extends State<NoteEditorToolbar> {
-  bool _showFormatToolbar = false;
+  void _navigateTo(
+    BuildContext context, {
+    required DrawerItem destination,
+    required Widget screen,
+  }) {
+    if (selected == destination) {
+      Navigator.pop(context);
+      return;
+    }
+
+    final notesProvider = context.read<NotesProvider>();
+
+    notesProvider.updateSearchQuery('');
+
+    Navigator.pop(context);
+
+    Navigator.of(context, rootNavigator: true).pushReplacement(
+      MaterialPageRoute<void>(
+        builder: (_) => ChangeNotifierProvider<NotesProvider>.value(
+          value: notesProvider,
+          child: screen,
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        // ==============================
-        // FORMAT TOOLBAR
-        // ==============================
-        AnimatedSize(
-          duration: const Duration(milliseconds: 200),
-          curve: Curves.easeOut,
-          child: _showFormatToolbar && widget.controller != null
-              ? Container(
-                  width: double.infinity,
-                  decoration: BoxDecoration(
-                    border: Border(
-                      bottom: BorderSide(color: Theme.of(context).dividerColor),
-                    ),
-                  ),
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: NotedSpacing.sm,
-                      vertical: 4,
-                    ),
-                    child: FormatToolBar(
-                      onFormat: widget.onFormat,
-                      controller: widget.controller!,
-                    ),
-                  ),
-                )
-              : const SizedBox.shrink(),
-        ),
+    final user = FirebaseAuth.instance.currentUser;
 
-        // ==============================
-        // MAIN TOOLBAR
-        // ==============================
-        Row(
-          children: [
-            // COLOR
-            Expanded(
-              child: IconButton(
-                onPressed: () {
-                  showModalBottomSheet(
-                    isScrollControlled: true,
-                    context: context,
-                    builder: (context) {
-                      return SafeArea(
-                        child: Padding(
-                          padding: const EdgeInsets.all(NotedSpacing.md),
-                          child: ColorPicker(
-                            selectedColor: widget.selectedColor,
-                            onColorSelected: (color) {
-                              widget.onSelectedColor(color);
-                              Navigator.pop(context);
-                            },
-                          ),
-                        ),
-                      );
-                    },
-                  );
-                },
-                icon: const Icon(Icons.color_lens_outlined),
-              ),
-            ),
-
-            // REMINDER
-            Expanded(
-              child: IconButton(
-                onPressed: () {
-                  showModalBottomSheet(
-                    context: context,
-                    isScrollControlled: true,
-                    builder: (context) {
-                      return SafeArea(
-                        child: Padding(
-                          padding: const EdgeInsets.all(NotedSpacing.md),
-                          child: ReminderPicker(
-                            reminder: widget.reminder,
-                            recurrence: widget.recurrence,
-                            onReminderChanged: (reminder) {
-                              widget.onSelectedReminder(reminder);
-                              Navigator.pop(context);
-                            },
-                            onRecurrenceChanged: widget.onSelectedRecurrence,
-                          ),
-                        ),
-                      );
-                    },
-                  );
-                },
-                icon: const Icon(Icons.notifications_active_outlined),
-              ),
-            ),
-
-            // FORMAT
-            if (widget.controller != null)
-              Expanded(
-                child: IconButton(
-                  onPressed: () {
-                    setState(() {
-                      _showFormatToolbar = !_showFormatToolbar;
-                    });
-                  },
-                  icon: Icon(
-                    Icons.text_format,
-                    color: _showFormatToolbar
-                        ? Theme.of(context).colorScheme.primary
-                        : null,
-                  ),
+    return Drawer(
+      child: ListView(
+        padding: EdgeInsets.zero,
+        children: [
+          DrawerHeader(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                const Icon(Icons.notes, size: 40),
+                const SizedBox(height: 12),
+                Text(
+                  user?.displayName ?? 'NOTED',
+                  style: Theme.of(context).textTheme.titleMedium,
                 ),
-              ),
-          ],
-        ),
-      ],
+                if (user?.email != null)
+                  Text(
+                    user!.email!,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                Text(
+                  'Organize your Ideas',
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+              ],
+            ),
+          ),
+          ListTile(
+            selected: selected == DrawerItem.notes,
+            leading: const Icon(Icons.notes_outlined),
+            title: Text(
+              'Notes',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            onTap: () => _navigateTo(
+              context,
+              destination: DrawerItem.notes,
+              screen: const NotesScreen(),
+            ),
+          ),
+          const SizedBox(height: 8),
+          ListTile(
+            selected: selected == DrawerItem.archive,
+            leading: const Icon(Icons.archive_outlined),
+            title: Text(
+              'Archived',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            onTap: () => _navigateTo(
+              context,
+              destination: DrawerItem.archive,
+              screen: const ArchiveScreen(),
+            ),
+          ),
+          const SizedBox(height: 8),
+          ListTile(
+            selected: selected == DrawerItem.trash,
+            leading: const Icon(Icons.delete_outlined),
+            title: Text(
+              'Trash Bin',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            onTap: () => _navigateTo(
+              context,
+              destination: DrawerItem.trash,
+              screen: const TrashScreen(),
+            ),
+          ),
+          const Divider(),
+          ListTile(
+            leading: const Icon(Icons.logout),
+            title: Text(
+              'Logout',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            onTap: () async {
+              Navigator.pop(context);
+
+              try {
+                await AuthService().signOut();
+              } catch (e, stackTrace) {
+                debugPrint('Logout error: $e');
+                debugPrintStack(stackTrace: stackTrace);
+
+                if (!context.mounted) return;
+
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Unable to log out. Please try again.'),
+                  ),
+                );
+              }
+            },
+          ),
+        ],
+      ),
     );
   }
 }
-```
-
-## File: lib/core/theme/app_typography.dart
-```dart
-import 'package:flutter/material.dart';
-
-final class NotedTypography {
-  NotedTypography._();
-
-  static const TextStyle title = TextStyle(
-    fontFamily: 'SpaceMono',
-    fontWeight: FontWeight.bold,
-    fontSize: 16,
-  );
-  static const TextStyle appTitle = TextStyle(
-    fontFamily: 'SpaceMono',
-    fontWeight: FontWeight.bold,
-    fontSize: 24,
-  );
-  static const TextStyle body = TextStyle(
-    fontFamily: 'SpaceMono',
-    fontSize: 16,
-  );
-
-  static const TextStyle caption = TextStyle(
-    fontFamily: 'SpaceMono',
-    fontSize: 12,
-  );
-}
-```
+````
 
 ## File: lib/core/features/notes/data/repositories/note_repository_impl.dart
-```dart
+````dart
 import '../../domain/entities/note.dart';
 import '../../domain/repositories/note_repositories.dart';
 
@@ -2904,10 +4089,10 @@ class NoteRepositoryImpl implements NoteRepositories {
     await datasource.updateNote(NoteModel.fromEntity(note));
   }
 }
-```
+````
 
 ## File: lib/core/features/notes/domain/entities/note.dart
-```dart
+````dart
 import 'package:notes_app/core/features/notes/domain/entities/checklist_item.dart';
 
 enum NoteCategory { personal, study, work, ideas }
@@ -2999,122 +4184,10 @@ class Note {
     );
   }
 }
-```
-
-## File: pubspec.yaml
-```yaml
-name: notes_app
-description: "A new Flutter project."
-# The following line prevents the package from being accidentally published to
-# pub.dev using `flutter pub publish`. This is preferred for private packages.
-publish_to: 'none' # Remove this line if you wish to publish to pub.dev
-
-# The following defines the version and build number for your application.
-# A version number is three numbers separated by dots, like 1.2.43
-# followed by an optional build number separated by a +.
-# Both the version and the builder number may be overridden in flutter
-# build by specifying --build-name and --build-number, respectively.
-# In Android, build-name is used as versionName while build-number used as versionCode.
-# Read more about Android versioning at https://developer.android.com/studio/publish/versioning
-# In iOS, build-name is used as CFBundleShortVersionString while build-number is used as CFBundleVersion.
-# Read more about iOS versioning at
-# https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
-# In Windows, build-name is used as the major, minor, and patch parts
-# of the product and file versions while build-number is used as the build suffix.
-version: 1.0.0+1
-
-environment:
-  sdk: ^3.10.8
-
-# Dependencies specify other packages that your package needs in order to work.
-# To automatically upgrade your package dependencies to the latest versions
-# consider running `flutter pub upgrade --major-versions`. Alternatively,
-# dependencies can be manually updated by changing the version numbers below to
-# the latest version available on pub.dev. To see which dependencies have newer
-# versions available, run `flutter pub outdated`.
-dependencies:
-  flutter:
-    sdk: flutter
-  provider: ^6.1.5
-  hive: ^2.2.3
-  hive_flutter: ^1.1.0
-  intl: ^0.20.2
-  uuid: ^4.6.0
-  flutter_local_notifications: ^22.2.0
-  timezone: ^0.11.1
-  flutter_timezone: ^5.1.0
-  dotted_border: ^3.1.0
-  # The following adds the Cupertino Icons font to your application.
-  # Use with the CupertinoIcons class for iOS style icons.
-  cupertino_icons: ^1.0.8
-  flutter_localizations: 
-    sdk: flutter
-  flutter_quill: ^11.5.1
-  
-
-dev_dependencies:
-  flutter_test:
-    sdk: flutter
-
-  # The "flutter_lints" package below contains a set of recommended lints to
-  # encourage good coding practices. The lint set provided by the package is
-  # activated in the `analysis_options.yaml` file located at the root of your
-  # package. See that file for information about deactivating specific lint
-  # rules and activating additional ones.
-  flutter_lints: ^6.0.0
-
-# For information on the generic Dart part of this file, see the
-# following page: https://dart.dev/tools/pub/pubspec
-
-# The following section is specific to Flutter packages.
-flutter:
-
-  # The following line ensures that the Material Icons font is
-  # included with your application, so that you can use the icons in
-  # the material Icons class.
-  uses-material-design: true
-  fonts:
-   - family: SpaceMono
-     fonts: 
-      - asset: assets/fonts/SpaceMono-Regular.ttf
-      - asset: assets/fonts/SpaceMono-Bold.ttf
-        weight: 700
-  
-
-  # To add assets to your application, add an assets section, like this:
-  # assets:
-  #   - images/a_dot_burr.jpeg
-  #   - images/a_dot_ham.jpeg
-
-  # An image asset can refer to one or more resolution-specific "variants", see
-  # https://flutter.dev/to/resolution-aware-images
-
-  # For details regarding adding assets from package dependencies, see
-  # https://flutter.dev/to/asset-from-package
-
-  # To add custom fonts to your application, add a fonts section here,
-  # in this "flutter" section. Each entry in this list should have a
-  # "family" key with the font family name, and a "fonts" key with a
-  # list giving the asset and other descriptors for the font. For
-  # example:
-  # fonts:
-  #   - family: Schyler
-  #     fonts:
-  #       - asset: fonts/Schyler-Regular.ttf
-  #       - asset: fonts/Schyler-Italic.ttf
-  #         style: italic
-  #   - family: Trajan Pro
-  #     fonts:
-  #       - asset: fonts/TrajanPro.ttf
-  #       - asset: fonts/TrajanPro_Bold.ttf
-  #         weight: 700
-  #
-  # For details regarding fonts from package dependencies,
-  # see https://flutter.dev/to/font-from-package
-```
+````
 
 ## File: lib/core/features/notes/data/models/note_model.dart
-```dart
+````dart
 import '../../domain/entities/note.dart';
 import 'package:notes_app/core/features/notes/data/models/checklist_item_model.dart';
 
@@ -3218,10 +4291,125 @@ class NoteModel extends Note {
     };
   }
 }
-```
+````
+
+## File: pubspec.yaml
+````yaml
+name: notes_app
+description: "A new Flutter project."
+# The following line prevents the package from being accidentally published to
+# pub.dev using `flutter pub publish`. This is preferred for private packages.
+publish_to: 'none' # Remove this line if you wish to publish to pub.dev
+
+# The following defines the version and build number for your application.
+# A version number is three numbers separated by dots, like 1.2.43
+# followed by an optional build number separated by a +.
+# Both the version and the builder number may be overridden in flutter
+# build by specifying --build-name and --build-number, respectively.
+# In Android, build-name is used as versionName while build-number used as versionCode.
+# Read more about Android versioning at https://developer.android.com/studio/publish/versioning
+# In iOS, build-name is used as CFBundleShortVersionString while build-number is used as CFBundleVersion.
+# Read more about iOS versioning at
+# https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
+# In Windows, build-name is used as the major, minor, and patch parts
+# of the product and file versions while build-number is used as the build suffix.
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.10.8
+
+# Dependencies specify other packages that your package needs in order to work.
+# To automatically upgrade your package dependencies to the latest versions
+# consider running `flutter pub upgrade --major-versions`. Alternatively,
+# dependencies can be manually updated by changing the version numbers below to
+# the latest version available on pub.dev. To see which dependencies have newer
+# versions available, run `flutter pub outdated`.
+dependencies:
+  flutter:
+    sdk: flutter
+  provider: ^6.1.5
+  hive: ^2.2.3
+  hive_flutter: ^1.1.0
+  intl: ^0.20.2
+  uuid: ^4.6.0
+  flutter_local_notifications: ^22.2.0
+  timezone: ^0.11.1
+  flutter_timezone: ^5.1.0
+  dotted_border: ^3.1.0
+  # The following adds the Cupertino Icons font to your application.
+  # Use with the CupertinoIcons class for iOS style icons.
+  cupertino_icons: ^1.0.8
+  flutter_localizations: 
+    sdk: flutter
+  flutter_quill: ^11.5.1
+  firebase_core: ^4.15.0
+  firebase_auth: ^6.7.0
+  google_sign_in: ^7.2.0
+  
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  # The "flutter_lints" package below contains a set of recommended lints to
+  # encourage good coding practices. The lint set provided by the package is
+  # activated in the `analysis_options.yaml` file located at the root of your
+  # package. See that file for information about deactivating specific lint
+  # rules and activating additional ones.
+  flutter_lints: ^6.0.0
+
+# For information on the generic Dart part of this file, see the
+# following page: https://dart.dev/tools/pub/pubspec
+
+# The following section is specific to Flutter packages.
+flutter:
+
+  # The following line ensures that the Material Icons font is
+  # included with your application, so that you can use the icons in
+  # the material Icons class.
+  uses-material-design: true
+  fonts:
+   - family: SpaceMono
+     fonts: 
+      - asset: assets/fonts/SpaceMono-Regular.ttf
+      - asset: assets/fonts/SpaceMono-Bold.ttf
+        weight: 700
+  
+
+  # To add assets to your application, add an assets section, like this:
+  # assets:
+  #   - images/a_dot_burr.jpeg
+  #   - images/a_dot_ham.jpeg
+
+  # An image asset can refer to one or more resolution-specific "variants", see
+  # https://flutter.dev/to/resolution-aware-images
+
+  # For details regarding adding assets from package dependencies, see
+  # https://flutter.dev/to/asset-from-package
+
+  # To add custom fonts to your application, add a fonts section here,
+  # in this "flutter" section. Each entry in this list should have a
+  # "family" key with the font family name, and a "fonts" key with a
+  # list giving the asset and other descriptors for the font. For
+  # example:
+  # fonts:
+  #   - family: Schyler
+  #     fonts:
+  #       - asset: fonts/Schyler-Regular.ttf
+  #       - asset: fonts/Schyler-Italic.ttf
+  #         style: italic
+  #   - family: Trajan Pro
+  #     fonts:
+  #       - asset: fonts/TrajanPro.ttf
+  #       - asset: fonts/TrajanPro_Bold.ttf
+  #         weight: 700
+  #
+  # For details regarding fonts from package dependencies,
+  # see https://flutter.dev/to/font-from-package
+````
 
 ## File: lib/core/features/notes/presentation/provider/notes_provider.dart
-```dart
+````dart
 import 'package:flutter/material.dart';
 import 'package:notes_app/core/features/notes/domain/entities/checklist_item.dart';
 import 'package:notes_app/core/features/notes/domain/repositories/note_repositories.dart';
@@ -3234,11 +4422,13 @@ class NotesProvider extends ChangeNotifier {
   NotesProvider({required this.repositories});
 
   final NoteRepositories repositories;
+
   bool _isLoading = false;
   List<Note> _notes = [];
   String _searchQuery = '';
   NoteCategory? _selectedCategory;
   SortType _sortType = SortType.recent;
+  NoteViewType _viewType = NoteViewType.gridView;
 
   NoteCategory? get selectedCategory => _selectedCategory;
 
@@ -3255,8 +4445,6 @@ class NotesProvider extends ChangeNotifier {
   List<Note> get archivedNotes => _filterNotes(NoteStatus.archived);
 
   List<Note> get trashedNotes => _filterNotes(NoteStatus.trashed);
-
-  NoteViewType _viewType = NoteViewType.gridView;
 
   NoteViewType get viewType => _viewType;
 
@@ -3454,10 +4642,10 @@ class NotesProvider extends ChangeNotifier {
     }
   }
 }
-```
+````
 
 ## File: lib/core/features/notes/presentation/screens/add_note_screen.dart
-```dart
+````dart
 import 'package:flutter/material.dart';
 import 'package:flutter_quill/flutter_quill.dart';
 import 'package:notes_app/core/features/notes/domain/entities/checklist_item.dart';
@@ -3569,13 +4757,7 @@ class _AddNoteScreenState extends State<AddNoteScreen> {
           notificationId = DateTime.now().millisecondsSinceEpoch.remainder(
             1 << 31,
           );
-          debugPrint('--------------------------------');
-          debugPrint('Current Time : ${DateTime.now()}');
-          debugPrint('Reminder Time: $selectedReminder');
-          debugPrint(
-            'Difference: ${selectedReminder!.difference(DateTime.now()).inSeconds} seconds',
-          );
-          debugPrint('--------------------------------');
+
           await NotificationService.instance.scheduleNotification(
             id: notificationId,
             title: _titleController.text,
@@ -3620,8 +4802,6 @@ class _AddNoteScreenState extends State<AddNoteScreen> {
   @override
   Widget build(BuildContext context) {
     final isTextNote = widget.type == NoteType.text;
-    debugPrint('AddNoteScreen type: ${widget.type}');
-    debugPrint('isTextNote: $isTextNote');
 
     return Scaffold(
       resizeToAvoidBottomInset: true,
@@ -3811,43 +4991,29 @@ class _AddNoteScreenState extends State<AddNoteScreen> {
     );
   }
 }
-```
+````
 
 ## File: lib/main.dart
-```dart
+````dart
 import 'package:flutter/material.dart';
-//import 'package:flutter_quill/flutter_quill.dart';
-import 'package:hive_flutter/adapters.dart';
-import 'package:notes_app/core/features/notes/presentation/provider/notes_provider.dart';
-import 'package:notes_app/core/features/notes/presentation/screens/login_screen.dart';
-//import 'package:notes_app/core/features/rich_text_test/rich_text_test_screen.dart';
+import 'package:hive_flutter/hive_flutter.dart';
+import 'package:notes_app/core/features/auth/presentation/screens/auth_gate.dart';
 import 'package:notes_app/core/services/notification_service.dart';
-import 'core/features/notes/data/datasources/local_note_datasources.dart';
-import 'core/features/notes/data/repositories/note_repository_impl.dart';
-
-import 'package:provider/provider.dart';
 import 'package:notes_app/core/theme/app_theme.dart';
-//import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:firebase_core/firebase_core.dart';
+
+import 'firebase_options.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+
   await Hive.initFlutter();
-
-  final datasource = LocalNoteDatasources();
-
-  await datasource.init();
-
-  final repository = NoteRepositoryImpl(datasource);
 
   await NotificationService.instance.initialize();
 
-  runApp(
-    ChangeNotifierProvider(
-      create: (_) => NotesProvider(repositories: repository)..loadNotes(),
-      child: MyApp(),
-    ),
-  );
+  runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {
@@ -3860,22 +5026,14 @@ class MyApp extends StatelessWidget {
       darkTheme: NotedTheme.dark,
       themeMode: ThemeMode.system,
       debugShowCheckedModeBanner: false,
-      // localizationsDelegates: const [
-      //   GlobalMaterialLocalizations.delegate,
-      //   GlobalCupertinoLocalizations.delegate,
-      //   GlobalWidgetsLocalizations.delegate,
-      //   FlutterQuillLocalizations.delegate,
-      // ],
-
-      // supportedLocales: FlutterQuillLocalizations.supportedLocales,
-      home: const LoginScreen(),
+      home: const AuthGate(),
     );
   }
 }
-```
+````
 
 ## File: lib/core/features/notes/presentation/screens/edit_note_screen.dart
-```dart
+````dart
 import 'package:flutter/material.dart';
 import 'package:flutter_quill/flutter_quill.dart';
 import 'package:notes_app/core/features/notes/domain/entities/checklist_item.dart';
@@ -4042,9 +5200,7 @@ class _EditNoteScreenState extends State<EditNoteScreen> {
         notificationId ??= DateTime.now().millisecondsSinceEpoch.remainder(
           1 << 31,
         );
-        debugPrint('Reminder: $selectedReminder');
-        debugPrint('Recurrence: $recurrence');
-        debugPrint('Notification ID: $notificationId');
+
         await NotificationService.instance.scheduleNotification(
           id: notificationId,
           title: _titleController.text.trim(),
@@ -4072,9 +5228,7 @@ class _EditNoteScreenState extends State<EditNoteScreen> {
       );
 
       await notesProvider.updateNote(updatedNote);
-      debugPrint('Updated reminder: ${updatedNote.reminderAt}');
-      debugPrint('Updated recurrence: ${updatedNote.recurrence}');
-      debugPrint('Updated notification ID: ${updatedNote.notificationId}');
+
       if (!mounted) return;
 
       navigator.pop(true);
@@ -4295,10 +5449,10 @@ class _EditNoteScreenState extends State<EditNoteScreen> {
     );
   }
 }
-```
+````
 
 ## File: lib/core/features/notes/presentation/screens/notes_screen.dart
-```dart
+````dart
 import 'package:flutter/material.dart';
 import 'package:notes_app/core/features/notes/domain/entities/note.dart';
 import 'package:notes_app/core/features/notes/presentation/provider/notes_provider.dart';
@@ -4465,7 +5619,12 @@ class _NotesScreenState extends State<NotesScreen> {
 
           await Navigator.push(
             context,
-            MaterialPageRoute(builder: (_) => AddNoteScreen(type: type)),
+            MaterialPageRoute(
+              builder: (_) => ChangeNotifierProvider<NotesProvider>.value(
+                value: context.read<NotesProvider>(),
+                child: AddNoteScreen(type: type),
+              ),
+            ),
           );
         },
         child: const Icon(Icons.add),
@@ -4473,4 +5632,4 @@ class _NotesScreenState extends State<NotesScreen> {
     );
   }
 }
-```
+````

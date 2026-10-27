@@ -164,7 +164,12 @@ class _NotesScreenState extends State<NotesScreen> {
 
           await Navigator.push(
             context,
-            MaterialPageRoute(builder: (_) => AddNoteScreen(type: type)),
+            MaterialPageRoute(
+              builder: (_) => ChangeNotifierProvider<NotesProvider>.value(
+                value: context.read<NotesProvider>(),
+                child: AddNoteScreen(type: type),
+              ),
+            ),
           );
         },
         child: const Icon(Icons.add),

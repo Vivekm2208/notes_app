@@ -19,26 +19,34 @@ class AppDrawer extends StatelessWidget {
     required DrawerItem destination,
     required Widget screen,
   }) {
-    if (selected == destination) {
-      Navigator.pop(context);
+    final navigator = Navigator.of(context, rootNavigator: true);
+    final notesProvider = context.read<NotesProvider>();
+
+    Navigator.pop(context); // close the drawer
+
+    if (selected == destination) return;
+
+    notesProvider.updateSearchQuery('');
+
+    if (destination == DrawerItem.notes) {
+      navigator.popUntil((route) => route.isFirst); // back to the owner
       return;
     }
 
-    // Capture the existing provider before closing the drawer.
-    final notesProvider = context.read<NotesProvider>();
-    notesProvider.updateSearchQuery('');
-
-    Navigator.pop(context);
-
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute<void>(
-        builder: (_) => ChangeNotifierProvider<NotesProvider>.value(
-          value: notesProvider,
-          child: screen,
-        ),
+    final route = MaterialPageRoute<void>(
+      builder: (_) => ChangeNotifierProvider<NotesProvider>.value(
+        value: notesProvider,
+        child: screen,
       ),
     );
+
+    if (selected == DrawerItem.notes) {
+      navigator.push(route); // home stays alive underneath
+    } else {
+      navigator.pushReplacement(
+        route,
+      ); // Archive/Trash own nothing, safe to replace
+    }
   }
 
   @override

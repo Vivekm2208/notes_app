@@ -42,6 +42,8 @@ class _AuthenticatedAppState extends State<AuthenticatedApp> {
         }
 
         if (snapshot.hasError) {
+          debugPrint('Datasource initialization failed: ${snapshot.error}');
+
           return const Scaffold(
             body: Center(
               child: Text('Unable to load your notes. Please restart the app.'),
@@ -53,9 +55,18 @@ class _AuthenticatedAppState extends State<AuthenticatedApp> {
 
         return ChangeNotifierProvider<NotesProvider>(
           create: (_) => NotesProvider(repositories: repository)..loadNotes(),
-          child: const NotesScreen(),
+          child: const _AuthenticatedNotesHost(),
         );
       },
     );
+  }
+}
+
+class _AuthenticatedNotesHost extends StatelessWidget {
+  const _AuthenticatedNotesHost();
+
+  @override
+  Widget build(BuildContext context) {
+    return const NotesScreen();
   }
 }

@@ -11,6 +11,18 @@ class NoteActionSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    Future<void> performAction(
+      Future<void> Function(NotesProvider provider) action,
+    ) async {
+      final provider = context.read<NotesProvider>();
+
+      await action(provider);
+
+      if (context.mounted) {
+        Navigator.pop(context);
+      }
+    }
+
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.all(8),
@@ -18,38 +30,24 @@ class NoteActionSheet extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Text('Actions', style: Theme.of(context).textTheme.titleMedium),
-
             const SizedBox(height: 8),
-
             NoteActionOptions(
               title: note.isPinned ? 'UnPin Note' : 'Pin Note',
               icon: note.isPinned ? Icons.push_pin : Icons.push_pin_outlined,
-              onTap: () async {
-                await context.read<NotesProvider>().togglePin(note);
-                if (context.mounted) {
-                  Navigator.pop(context);
-                }
-              },
+              onTap: () =>
+                  performAction((provider) => provider.togglePin(note)),
             ),
             NoteActionOptions(
               title: 'Archive Note',
               icon: Icons.archive,
-              onTap: () async {
-                await context.read<NotesProvider>().archiveNote(note);
-                if (context.mounted) {
-                  Navigator.pop(context);
-                }
-              },
+              onTap: () =>
+                  performAction((provider) => provider.archiveNote(note)),
             ),
             NoteActionOptions(
               title: 'Delete Note',
               icon: Icons.delete,
-              onTap: () async {
-                await context.read<NotesProvider>().moveToTrash(note);
-                if (context.mounted) {
-                  Navigator.pop(context);
-                }
-              },
+              onTap: () =>
+                  performAction((provider) => provider.moveToTrash(note)),
             ),
             NoteActionOptions(
               title: 'Cancel',
