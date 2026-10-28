@@ -1,5 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:notes_app/core/features/notes/data/datasources/firestore_note_datasources.dart';
 import 'package:notes_app/core/features/notes/data/datasources/local_note_datasources.dart';
 import 'package:notes_app/core/features/notes/data/repositories/note_repository_impl.dart';
 import 'package:notes_app/core/features/notes/presentation/provider/notes_provider.dart';
@@ -17,11 +18,27 @@ class AuthenticatedApp extends StatefulWidget {
 
 class _AuthenticatedAppState extends State<AuthenticatedApp> {
   late final Future<LocalNoteDatasources> _datasourceFuture;
+  late final Future<NoteRepositoryImpl> _repositoryFuture;
 
   @override
   void initState() {
     super.initState();
     _datasourceFuture = _initializeDatasource();
+    _repositoryFuture = _initializeRepository();
+  }
+
+  Future<NoteRepositoryImpl> _initializeRepository() async {
+    final datasource = await _datasourceFuture;
+
+    final repository = NoteRepositoryImpl(
+      datasource,
+      fireStoreNoteDataSources: FireStoreNoteDataSources(
+        userId: widget.user.uid,
+      ),
+    );
+
+    repository.startSyncMonitoring();
+    return repository;
   }
 
   Future<LocalNoteDatasources> _initializeDatasource() async {
@@ -31,9 +48,22 @@ class _AuthenticatedAppState extends State<AuthenticatedApp> {
   }
 
   @override
+  void dispose() {
+    _repositoryFuture
+        .then((repository) {
+          repository.disposeSyncMonitoring();
+        })
+        .catchError((Object error) {
+          debugPrint('Repository cleanup failed: $error');
+        });
+
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return FutureBuilder<LocalNoteDatasources>(
-      future: _datasourceFuture,
+    return FutureBuilder<NoteRepositoryImpl>(
+      future: _repositoryFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Scaffold(
@@ -42,7 +72,7 @@ class _AuthenticatedAppState extends State<AuthenticatedApp> {
         }
 
         if (snapshot.hasError) {
-          debugPrint('Datasource initialization failed: ${snapshot.error}');
+          debugPrint('Repository initialization failed: ${snapshot.error}');
 
           return const Scaffold(
             body: Center(
@@ -51,10 +81,9 @@ class _AuthenticatedAppState extends State<AuthenticatedApp> {
           );
         }
 
-        final repository = NoteRepositoryImpl(snapshot.data!);
-
         return ChangeNotifierProvider<NotesProvider>(
-          create: (_) => NotesProvider(repositories: repository)..loadNotes(),
+          create: (_) =>
+              NotesProvider(repositories: snapshot.data!)..loadNotes(),
           child: const _AuthenticatedNotesHost(),
         );
       },

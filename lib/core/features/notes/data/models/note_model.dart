@@ -39,6 +39,26 @@ class NoteModel extends Note {
       recurrence: note.recurrence,
     );
   }
+  static DateTime? _parseDate(dynamic value) {
+    if (value == null) return null;
+
+    if (value is DateTime) return value;
+
+    if (value is String) {
+      return DateTime.parse(value);
+    }
+
+    if (value is int) {
+      return DateTime.fromMillisecondsSinceEpoch(value);
+    }
+
+    // Supports Firestore Timestamp without importing its type here.
+    if (value.runtimeType.toString() == 'Timestamp') {
+      return (value as dynamic).toDate() as DateTime;
+    }
+
+    throw FormatException('Unsupported date format: ${value.runtimeType}');
+  }
 
   factory NoteModel.fromMap(Map<String, dynamic> map) {
     return NoteModel(
@@ -63,15 +83,9 @@ class NoteModel extends Note {
       category: NoteCategory.values.byName(map['category'] ?? 'personal'),
       status: NoteStatus.values.byName(map['status'] ?? 'active'),
       colorValue: map['colorValue'] as int? ?? 0xFFFFFFFF,
-      createdAt: map['createdAt'] != null
-          ? DateTime.parse(map['createdAt'] as String)
-          : DateTime.now(),
-      lastEdited: map['lastEdited'] != null
-          ? DateTime.parse(map['lastEdited'] as String)
-          : DateTime.now(),
-      reminderAt: map['reminderAt'] != null
-          ? DateTime.parse(map['reminderAt'] as String)
-          : null,
+      createdAt: _parseDate(map['createdAt']) ?? DateTime.now(),
+      lastEdited: _parseDate(map['lastEdited']) ?? DateTime.now(),
+      reminderAt: _parseDate(map['reminderAt']),
       notificationId: map['notificationId'] as int?,
       recurrence: ReminderRecurrence.values.byName(map['recurrence'] ?? 'none'),
     );

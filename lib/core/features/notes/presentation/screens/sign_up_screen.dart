@@ -4,7 +4,6 @@ import 'package:notes_app/core/features/notes/presentation/screens/login_screen.
 import 'package:notes_app/core/theme/app_radius.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:notes_app/core/features/auth/data/services/auth_service.dart';
-import 'package:notes_app/core/features/notes/presentation/screens/notes_screen.dart';
 
 class SignUpScreen extends StatefulWidget {
   const SignUpScreen({super.key});
@@ -56,13 +55,13 @@ class _SignUpScreenState extends State<SignUpScreen> {
         password: _passwordController.text,
       );
 
-      if (!mounted) return;
+      // if (!mounted) return;
 
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(builder: (_) => const NotesScreen()),
-        (route) => false,
-      );
+      // Navigator.pushAndRemoveUntil(
+      //   context,
+      //   MaterialPageRoute(builder: (_) => const NotesScreen()),
+      //   (route) => false,
+      // );
     } on FirebaseAuthException catch (exception) {
       debugPrint('Firebase Auth error code: ${exception.code}');
       debugPrint('Firebase Auth error message: ${exception.message}');

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:notes_app/core/features/notes/presentation/screens/sign_up_screen.dart';
 import 'package:notes_app/core/features/auth/presentation/auth_text_field.dart';
-import 'package:notes_app/core/features/notes/presentation/screens/notes_screen.dart';
+
 import 'package:notes_app/core/theme/app_radius.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:notes_app/core/features/auth/data/services/auth_service.dart';
@@ -39,12 +39,12 @@ class _LoginScreenState extends State<LoginScreen> {
         password: _passwordController.text,
       );
 
-      if (!mounted) return;
+      // if (!mounted) return;
 
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const NotesScreen()),
-      );
+      // Navigator.pushReplacement(
+      //   context,
+      //   MaterialPageRoute(builder: (_) => const NotesScreen()),
+      // );
     } on FirebaseAuthException catch (exception) {
       debugPrint('Login error code: ${exception.code}');
       debugPrint('Login error message: ${exception.message}');
